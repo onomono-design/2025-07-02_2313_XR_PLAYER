@@ -2049,349 +2049,235 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
       {/* Regular Mode Content - Audio Only Mode (disabled in teaser) */}
       {!isXRMode && !isFullscreenMode && !isXRLoading && !isTeaserMode && (
         <>
-          {/* Top Section - Image Gallery/Slideshow (Pinned to Top) */}
-          <div className="flex-1 pt-12 md:pt-16 lg:pt-20 pb-4 md:pb-6 px-4 md:px-6 lg:px-8 flex items-center justify-center">
+          {/* Top Section - Image Gallery/Slideshow (Fills available space) */}
+          <div className="flex-1 flex items-center justify-center overflow-hidden">
             {!showPlaylist ? (
               // Album Cover/Image Slideshow
-              <div className="relative w-full max-w-sm md:max-w-md lg:max-w-lg">
-                <div 
-                  ref={sliderRef}
-                  className="aspect-square rounded-lg overflow-hidden shadow-lg relative cursor-grab active:cursor-grabbing select-none"
-                  onMouseEnter={() => setIsImageHovered(true)}
-                  onMouseLeave={() => setIsImageHovered(false)}
-                  onMouseDown={handleMouseDown}
-                  onMouseMove={handleMouseMove}
-                  onMouseUp={handleMouseUp}
-                  onTouchStart={handleTouchStart}
-                  onTouchMove={handleTouchMove}
-                  onTouchEnd={handleTouchEnd}
-                  style={{ touchAction: 'none' }}
-                >
-                  {track.thumbnails && track.thumbnails.length > 1 ? (
-                    <div className="relative w-full h-full">
-                      {/* Show skeleton only if images are loading */}
-                      {shouldShowImageSkeleton(track.thumbnails[currentThumbnailIndex]) && (
-                        <Skeleton className={`absolute inset-0 w-full h-full ${Z_LAYERS.IMAGE_OVERLAY}`} />
-                      )}
-                      
-                      {/* Current image with enhanced transition animation */}
-                      <div 
-                        className={`absolute inset-0 transition-transform duration-300 ease-out ${
-                          isTransitioning && autoTransitionDirection 
-                            ? autoTransitionDirection === 'next' 
-                              ? '-translate-x-full' 
-                              : 'translate-x-full'
-                            : 'translate-x-0'
-                        }`}
-                        style={{
-                          transform: isDragging 
-                            ? `translateX(${dragOffset}px)` 
-                            : isTransitioning && autoTransitionDirection
-                              ? autoTransitionDirection === 'next' 
-                                ? 'translateX(-100%)' 
-                                : 'translateX(100%)'
-                              : 'translateX(0px)'
-                        }}
-                      >
-                        <img
-                          src={track.thumbnails[currentThumbnailIndex]}
-                          alt={`${track.album} cover ${currentThumbnailIndex + 1}`}
-                          className="w-full h-full object-cover select-none"
-                          style={{ 
-                            userSelect: 'none',
-                            WebkitUserSelect: 'none',
-                            MozUserSelect: 'none',
-                            msUserSelect: 'none'
-                          }}
-                          draggable={false}
-                          onDragStart={(e) => e.preventDefault()}
-                        />
-                      </div>
-
-                      {/* Next image for automatic transitions */}
-                      {isTransitioning && autoTransitionDirection === 'next' && (
-                        <div 
-                          className="absolute inset-0 transition-transform duration-300 ease-out"
-                          style={{
-                            transform: 'translateX(0px)'
-                          }}
-                        >
-                          <img
-                            src={track.thumbnails[currentThumbnailIndex]}
-                            alt={`${track.album} cover ${currentThumbnailIndex + 1}`}
-                            className="w-full h-full object-cover select-none"
-                            style={{ 
-                              userSelect: 'none',
-                              WebkitUserSelect: 'none',
-                              MozUserSelect: 'none',
-                              msUserSelect: 'none'
-                            }}
-                            draggable={false}
-                            onDragStart={(e) => e.preventDefault()}
-                          />
-                        </div>
-                      )}
-
-                      {/* Previous image for automatic transitions */}
-                      {isTransitioning && autoTransitionDirection === 'prev' && (
-                        <div 
-                          className="absolute inset-0 transition-transform duration-300 ease-out"
-                          style={{
-                            transform: 'translateX(0px)'
-                          }}
-                        >
-                          <img
-                            src={track.thumbnails[currentThumbnailIndex]}
-                            alt={`${track.album} cover ${currentThumbnailIndex + 1}`}
-                            className="w-full h-full object-cover select-none"
-                            style={{ 
-                              userSelect: 'none',
-                              WebkitUserSelect: 'none',
-                              MozUserSelect: 'none',
-                              msUserSelect: 'none'
-                            }}
-                            draggable={false}
-                            onDragStart={(e) => e.preventDefault()}
-                          />
-                        </div>
-                      )}
-                      
-                      {/* Previous image (shown when dragging right) */}
-                      {isDragging && dragOffset > 0 && (
-                        <div 
-                          className="absolute inset-0"
-                          style={{
-                            transform: `translateX(${dragOffset - sliderRef.current!.clientWidth}px)`
-                          }}
-                        >
-                          <img
-                            src={track.thumbnails[(currentThumbnailIndex - 1 + track.thumbnails.length) % track.thumbnails.length]}
-                            alt={`${track.album} cover ${((currentThumbnailIndex - 1 + track.thumbnails.length) % track.thumbnails.length) + 1}`}
-                            className="w-full h-full object-cover select-none"
-                            style={{ 
-                              userSelect: 'none',
-                              WebkitUserSelect: 'none',
-                              MozUserSelect: 'none',
-                              msUserSelect: 'none'
-                            }}
-                            draggable={false}
-                            onDragStart={(e) => e.preventDefault()}
-                          />
-                        </div>
-                      )}
-                      
-                      {/* Next image (shown when dragging left) */}
-                      {isDragging && dragOffset < 0 && (
-                        <div 
-                          className="absolute inset-0"
-                          style={{
-                            transform: `translateX(${dragOffset + sliderRef.current!.clientWidth}px)`
-                          }}
-                        >
-                          <img
-                            src={track.thumbnails[(currentThumbnailIndex + 1) % track.thumbnails.length]}
-                            alt={`${track.album} cover ${((currentThumbnailIndex + 1) % track.thumbnails.length) + 1}`}
-                            className="w-full h-full object-cover select-none"
-                            style={{ 
-                              userSelect: 'none',
-                              WebkitUserSelect: 'none',
-                              MozUserSelect: 'none',
-                              msUserSelect: 'none'
-                            }}
-                            draggable={false}
-                            onDragStart={(e) => e.preventDefault()}
-                          />
-                        </div>
-                      )}
-                      
-                      {/* Hover Navigation Chevrons - Responsive with touch targets */}
-                      {isImageHovered && track.thumbnails.length > 1 && !isTransitioning && (
-                        <>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={previousThumbnail}
-                            className={`absolute left-2 md:left-3 lg:left-4 top-1/2 transform -translate-y-1/2 bg-black/60 hover:bg-black/80 active:bg-black/90 text-white hover:text-white backdrop-blur-sm h-8 w-8 md:h-10 md:w-10 opacity-90 hover:opacity-100 transition-all duration-200 ease-out active:scale-95 ${Z_LAYERS.UI_ELEMENTS} touch-target`}
-                          >
-                            <ChevronLeft className="h-4 w-4 md:h-5 md:w-5" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={nextThumbnail}
-                            className={`absolute right-2 md:right-3 lg:right-4 top-1/2 transform -translate-y-1/2 bg-black/60 hover:bg-black/80 active:bg-black/90 text-white hover:text-white backdrop-blur-sm h-8 w-8 md:h-10 md:w-10 opacity-90 hover:opacity-100 transition-all duration-200 ease-out active:scale-95 ${Z_LAYERS.UI_ELEMENTS} touch-target`}
-                          >
-                            <ChevronRight className="h-4 w-4 md:h-5 md:w-5" />
-                          </Button>
-                        </>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="w-full h-full">
-                      {shouldShowImageSkeleton(currentCover) && (
-                        <Skeleton className="absolute inset-0 w-full h-full" />
-                      )}
-                      <img
-                        src={currentCover}
-                        alt={`${track.album} cover`}
-                        className={`w-full h-full object-cover select-none transition-opacity duration-200 ease-out ${
-                          shouldShowImageSkeleton(currentCover) ? 'opacity-0' : 'opacity-100'
-                        }`}
-                        style={{ 
-                          userSelect: 'none',
-                          WebkitUserSelect: 'none',
-                          MozUserSelect: 'none',
-                          msUserSelect: 'none'
-                        }}
-                        draggable={false}
-                        onDragStart={(e) => e.preventDefault()}
-                      />
-                    </div>
-                  )}
-                </div>
-                
-                {/* Conditional Button - XR or Fullscreen with permission warning */}
-                <div className={`absolute bottom-2 md:bottom-3 lg:bottom-4 right-2 md:right-3 lg:right-4 flex gap-1 ${Z_LAYERS.HOVER_ELEMENTS}`}>
-                  {track.isXR ? (
-                    <div className="relative">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className={`bg-black/60 hover:bg-black/80 active:bg-black/90 dark:bg-white/80 dark:hover:bg-white/90 dark:active:bg-white text-white dark:text-black h-8 w-8 transition-all duration-200 ease-out active:scale-95 ${
-                          shouldShowXRPermissionWarning() ? 'border border-yellow-400/50' : ''
-                        }`}
-                        onClick={launchXRmode}
-                      >
-                        <Glasses className="h-4 w-4" />
-                      </Button>
-                      {shouldShowXRPermissionWarning() && (
-                        <div className="absolute -top-1 -right-1 w-3 h-3 bg-yellow-400 rounded-full border border-slate-900">
-                          <AlertTriangle className="h-2 w-2 text-slate-900 m-0.5" />
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="bg-black/60 hover:bg-black/80 active:bg-black/90 dark:bg-white/80 dark:hover:bg-white/90 dark:active:bg-white text-white dark:text-black h-8 w-8 transition-all duration-200 ease-out active:scale-95"
-                      onClick={launchFullscreenMode}
-                    >
-                      <Maximize className="h-4 w-4" />
-                    </Button>
-                  )}
-                </div>
-                
-                {/* Thumbnail indicators - Responsive positioning */}
-                {track.thumbnails && track.thumbnails.length > 1 && (
-                  <div className={`absolute bottom-2 md:bottom-3 lg:bottom-4 left-1/2 transform -translate-x-1/2 flex gap-1 md:gap-1.5 ${Z_LAYERS.HOVER_ELEMENTS}`}>
-                    {track.thumbnails.map((_, index) => (
-                      <button
-                        key={index}
-                        onClick={() => {
-                          if (!isTransitioning && !isDragging) {
-                            // Determine direction for smooth transition
-                            const direction = index > currentThumbnailIndex ? 'next' : 'prev';
-                            setAutoTransitionDirection(direction);
-                            setIsTransitioning(true);
-                            setCurrentThumbnailIndex(index);
-                            setTimeout(() => {
-                              setIsTransitioning(false);
-                              setAutoTransitionDirection(null);
-                            }, 300);
-                          }
-                        }}
-                        className={`w-1.5 h-1.5 rounded-full transition-all duration-200 ease-out hover:scale-125 active:scale-110 ${
-                          index === currentThumbnailIndex ? 'bg-white' : 'bg-white/50 hover:bg-white/75'
-                        }`}
-                      />
-                    ))}
-                  </div>
-                )}
+              <div className="w-full h-full flex items-center justify-center px-0 py-0">
+                {/* Use ImageSlider component instead of custom implementation */}
+                <ImageSlider
+                  images={Array.isArray(track.thumbnails) 
+                    ? track.thumbnails.map(img => typeof img === 'string' ? img : img.url) 
+                    : [track.cover]}
+                  enableFullscreen={true}
+                  showDescriptions={true}
+                  onSlideChange={(index) => setCurrentThumbnailIndex(index)}
+                  onFullscreenChange={(isFullscreen) => setIsFullscreenMode(isFullscreen)}
+                  className="w-full h-full"
+                  autoplay={true}
+                  defaultInterval={20}
+                  allowVerticalCrop={true}
+                />
               </div>
             ) : (
-              // Playlist - Match audio controller width and add proper padding
-              <div className="flex flex-col h-full max-w-sm md:max-w-md lg:max-w-lg mx-auto w-full">
-                <div className="bg-slate-800 dark:bg-slate-100 rounded-lg p-3 flex flex-col flex-1 min-h-0">
-                  <div className="flex items-center justify-between mb-3 flex-shrink-0">
-                    <div>
-                      <h3 className="text-white dark:text-slate-900 font-semibold text-sm">{tourConfig.tour.tourName}</h3>
-                      <p className="text-slate-300 dark:text-slate-600 text-xs">{tourConfig.tour.description}</p>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={togglePlaylist}
-                      className="text-slate-300 hover:text-white hover:bg-slate-700/60 dark:text-slate-600 dark:hover:text-slate-900 dark:hover:bg-slate-200/60 h-8 w-8 transition-all duration-200 ease-out active:scale-95"
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
+              // Playlist Mode - Fill available space with ScrollArea
+              <div className="w-full h-full flex flex-col p-4">
+                                 {/* Playlist Header - Enhanced for Mobile */}
+                 <div className="flex justify-between items-center mb-5 px-1">
+                   <h2 className="text-white text-2xl font-semibold">Tour Chapters</h2>
+                   <Button
+                     variant="ghost"
+                     size="icon"
+                     onClick={togglePlaylist}
+                     className="h-10 w-10 text-slate-300 hover:text-white hover:bg-white/10 rounded-lg"
+                   >
+                     <X className="h-5 w-5" />
+                   </Button>
+                 </div>
+                
+                                 {/* Playlist Tracks - Enhanced for Touch */}
+                 <ScrollArea className="flex-1 pr-4">
+                   <div className="space-y-3">
+                     {tracks.map((t, i) => (
+                       <div 
+                         key={t.id}
+                         className={`group flex items-center gap-4 p-4 rounded-xl cursor-pointer transition-colors duration-200 ${
+                           i === currentTrack
+                             ? 'bg-white/10 backdrop-blur-sm shadow-md'
+                             : 'hover:bg-white/5 active:bg-white/10'
+                         }`}
+                         onClick={() => selectTrack(i)}
+                       >
+                                                 {/* Track Number or Playing Indicator - Enhanced */}
+                         <div className="flex-shrink-0 w-8 h-8 flex items-center justify-center">
+                           {i === currentTrack ? (
+                             <div className={`${isPlaying ? 'block' : 'hidden'} w-4 h-4`}>
+                               <span className="block w-1 h-4 bg-blue-500 mr-0.5 animate-bar1 float-left"></span>
+                               <span className="block w-1 h-4 bg-blue-500 mr-0.5 animate-bar2 float-left"></span>
+                               <span className="block w-1 h-4 bg-blue-500 animate-bar3 float-left"></span>
+                             </div>
+                           ) : (
+                             <span className="text-base text-slate-400 group-hover:text-white font-medium">
+                               {i + 1}
+                             </span>
+                           )}
+                         </div>
+                        
+                                                 {/* Track Thumbnail - Larger */}
+                         <div className="w-14 h-14 flex-shrink-0 rounded-lg overflow-hidden shadow-sm">
+                           {shouldShowImageSkeleton(t.cover) ? (
+                             <Skeleton className="w-full h-full" />
+                           ) : (
+                             <img 
+                               src={t.thumbnails && t.thumbnails.length > 0 
+                                 ? (typeof t.thumbnails[0] === 'string' ? t.thumbnails[0] : (t.thumbnails[0] as TourImageData).url)
+                                 : t.cover} 
+                               alt={t.title}
+                               className="w-full h-full object-cover"
+                             />
+                           )}
+                         </div>
+                         
+                         {/* Track Info - Enhanced Typography */}
+                         <div className="flex-1 min-w-0">
+                           <div className={`font-medium text-base truncate ${
+                             i === currentTrack ? 'text-white' : 'text-slate-300 group-hover:text-white'
+                           }`}>
+                             {t.title}
+                           </div>
+                           <div className="text-sm text-slate-400 truncate mt-0.5">
+                             {t.artist}
+                           </div>
+                         </div>
+                        
+                                                 {/* XR Badge - Enhanced */}
+                         {t.isXR && (
+                           <Badge className="bg-gradient-to-r from-blue-500 to-purple-500 text-white border-0 text-xs px-3 py-1 rounded-md shadow-sm">
+                             <Glasses className="h-3.5 w-3.5 mr-1.5" />
+                             XR
+                           </Badge>
+                         )}
+                      </div>
+                    ))}
                   </div>
-                  <ScrollArea className="flex-1 min-h-0">
-                    <div className="space-y-2 pr-2">
-                      {tracks.map((trackItem, index) => (
-                        <div
-                          key={trackItem.id}
-                          onClick={() => selectTrack(index)}
-                          className={`flex items-center space-x-2 p-2 rounded-lg cursor-pointer transition-all duration-200 ease-out hover:scale-[1.02] active:scale-[0.98] ${
-                            index === currentTrack 
-                              ? 'bg-slate-700/80 dark:bg-slate-200/80' 
-                              : 'hover:bg-slate-700/60 dark:hover:bg-slate-200/60'
-                          }`}
-                        >
-                                                      <div className="w-8 h-8 rounded overflow-hidden flex-shrink-0 relative">
-                              {shouldShowImageSkeleton(trackItem.cover) && (
-                                <Skeleton className={`absolute inset-0 w-full h-full ${Z_LAYERS.IMAGE_OVERLAY}`} />
-                              )}
-                            <img
-                              src={trackItem.cover}
-                              alt={`${trackItem.album} cover`}
-                              className={`w-full h-full object-cover transition-opacity duration-200 ease-out ${
-                                shouldShowImageSkeleton(trackItem.cover) ? 'opacity-0' : 'opacity-100'
-                              }`}
-                            />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-1">
-                              <p className="font-medium text-white dark:text-slate-900 truncate text-xs">
-                                {trackItem.title}
-                              </p>
-                              {trackItem.isXR ? (
-                                <div className="relative">
-                                  <Eye className="h-2 w-2 text-blue-400 flex-shrink-0" />
-                                  {deviceOrientationPermission && !deviceOrientationPermission.granted && deviceOrientationPermission.supported && (
-                                    <div className={`absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-yellow-400 rounded-full ${Z_LAYERS.UI_ELEMENTS}`}></div>
-                                  )}
-                                </div>
-                              ) : (
-                                <Maximize className="h-2 w-2 text-green-400 flex-shrink-0" />
-                              )}
-                              {trackItem.isTeaser && <Badge variant="outline" className="text-xs h-3 flex-shrink-0">Preview</Badge>}
-                            </div>
-                            <p className="text-xs text-slate-300 dark:text-slate-600 truncate">
-                              Chapter {trackItem.id}
-                            </p>
-                          </div>
-                          <div className="text-xs text-slate-400 dark:text-slate-500">
-                            {formatTime(trackItem.duration)}
-                          </div>
-                          {index === currentTrack && isPlaying && (
-                            <div className="w-3 h-3 flex items-center justify-center">
-                              <div className="w-1 h-1 bg-white dark:bg-slate-900 rounded-full animate-pulse"></div>
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </ScrollArea>
-                </div>
+                </ScrollArea>
               </div>
             )}
           </div>
 
-          {/* Bottom Section - Audio Controller Main Player Mode (Pinned to Bottom) */}
-          <div className="flex-shrink-0">
-            {audioControllerMainPlayerMode}
+          {/* Bottom Section - Audio Controller (Fixed to bottom) - Always Dark Mode */}
+          <div className="w-full bg-slate-900/95 backdrop-blur-sm p-4 z-50">
+                          {/* Track Info - Enhanced for Mobile Visibility */}
+              <div className="text-center mb-5">
+                <h3 className="text-white text-xl font-semibold truncate mb-1">{track.title}</h3>
+                <p className="text-slate-300 text-base">{track.artist}</p>
+                {track.script && (
+                  <div className="mt-2 text-slate-400 text-sm line-clamp-2 max-w-md mx-auto">
+                    {track.script.slice(0, 100)}...
+                  </div>
+                )}
+              </div>
+            
+            {/* Progress Bar */}
+            <AudioSlider
+              value={[currentTime / (duration || 1) * 100]}
+              min={0}
+              max={100}
+              currentTime={currentTime}
+              duration={duration}
+              buffered={audioRef.current && audioRef.current.buffered && audioRef.current.buffered.length > 0 
+                ? audioRef.current.buffered.end(audioRef.current.buffered.length - 1) / (duration || 1)
+                : 0}
+              largeTouchTargets={true}
+              showTimeTooltip={true}
+              variant="gradient"
+              className="mb-2"
+              onValueChange={(value) => handleSeek(value)}
+              onValueCommit={(value) => handleSeek(value)}
+              aria-label="Audio progress"
+            />
+            
+                          {/* Time Display - Larger for better readability */}
+              <div className="flex justify-between items-center text-sm text-slate-300 mb-5 px-1">
+                <span className="font-medium">{formatTime(currentTime)}</span>
+                <span>{formatTime(duration)}</span>
+              </div>
+              
+              {/* Controls - Improved Touch Targets */}
+              <div className="flex items-center justify-between">
+                {/* Left - Toggle Playlist */}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={togglePlaylist}
+                  className="h-12 w-12 text-slate-300 hover:text-white hover:bg-white/20 transition-all duration-200 ease-out active:scale-95"
+                >
+                  <List className="h-5 w-5" />
+                </Button>
+              
+                              {/* Center - Main Controls - Larger Touch Targets */}
+                <div className="flex items-center gap-4">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={previousTrack}
+                    disabled={isTeaserMode}
+                    className={`h-14 w-14 transition-all duration-200 ease-out active:scale-95 ${
+                      isTeaserMode 
+                        ? 'text-slate-500 cursor-not-allowed opacity-50'
+                        : 'text-slate-300 hover:text-white hover:bg-white/20'
+                    }`}
+                  >
+                    <SkipBack className="h-6 w-6" />
+                  </Button>
+
+                  <Button
+                    onClick={togglePlay}
+                    size="icon"
+                    className="h-16 w-16 bg-white hover:bg-slate-100 active:bg-slate-200 text-slate-900 rounded-full transition-all duration-200 ease-out active:scale-95 hover:scale-105 shadow-lg"
+                  >
+                    {isPlaying ? (
+                      <Pause className="h-7 w-7" />
+                    ) : (
+                      <Play className="h-7 w-7 ml-0.5" />
+                    )}
+                  </Button>
+
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={nextTrack}
+                    disabled={isTeaserMode}
+                    className={`h-14 w-14 transition-all duration-200 ease-out active:scale-95 ${
+                      isTeaserMode 
+                        ? 'text-slate-500 cursor-not-allowed opacity-50'
+                        : 'text-slate-300 hover:text-white hover:bg-white/20'
+                    }`}
+                  >
+                    <SkipForward className="h-6 w-6" />
+                  </Button>
+                </div>
+
+                              {/* Right - Volume or XR Mode Toggle - Enhanced Touch Target */}
+                {track.isXR ? (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={launchXRmode}
+                    className="h-12 w-12 text-slate-300 hover:text-white hover:bg-white/20 transition-all duration-200 ease-out active:scale-95 rounded-lg"
+                    disabled={!track.xrSrc}
+                  >
+                    <Glasses className="h-5 w-5" />
+                  </Button>
+                ) : (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={toggleMute}
+                    className={`h-12 w-12 transition-all duration-200 ease-out active:scale-95 rounded-lg ${
+                      isMuted 
+                        ? 'text-red-400 hover:text-red-300 hover:bg-red-500/20'
+                        : 'text-slate-300 hover:text-white hover:bg-white/20'
+                    }`}
+                  >
+                    {isMuted ? (
+                      <VolumeX className="h-5 w-5" />
+                    ) : (
+                      <Volume2 className="h-5 w-5" />
+                    )}
+                  </Button>
+                )}
+            </div>
           </div>
         </>
       )}

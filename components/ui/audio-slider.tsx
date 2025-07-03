@@ -85,7 +85,7 @@ export function AudioSlider({
   );
 
   const thumbClasses = cn(
-    "block rounded-full border-2 border-white bg-white shadow-lg transition-all",
+    "block rounded-full border-2 border-white bg-white shadow-lg",
     "hover:scale-110 focus-visible:scale-110 focus-visible:outline-none",
     "active:scale-95 disabled:pointer-events-none disabled:opacity-50",
     largeTouchTargets ? "h-6 w-6" : "h-4 w-4",
@@ -110,26 +110,26 @@ export function AudioSlider({
           {/* Buffer progress - shows loaded content */}
           <div
             className={cn(
-              "absolute h-full rounded-full bg-slate-400/40 transition-all duration-300",
+              "absolute h-full rounded-full bg-slate-400/40",
               variant === "glass" && "bg-white/30",
             )}
             style={{ width: `${bufferProgress}%` }}
           />
           
-          {/* Played progress - shows current position */}
+          {/* Played progress - shows current position - REMOVED ANIMATION */}
           <SliderPrimitive.Range
             className={cn(
-              "absolute h-full rounded-full transition-all duration-200",
+              "absolute h-full rounded-full",
               variant === "default" && "bg-blue-500",
               variant === "glass" && "bg-white/70",
               variant === "gradient" && "bg-gradient-to-r from-blue-500 to-purple-600",
             )}
           />
           
-          {/* Unplayed region indicator */}
+          {/* Unplayed region indicator - REMOVED ANIMATION */}
           <div
             className={cn(
-              "absolute right-0 h-full rounded-full transition-all duration-200",
+              "absolute right-0 h-full rounded-full",
               variant === "default" && "bg-slate-500/30",
               variant === "glass" && "bg-white/10",
               variant === "gradient" && "bg-slate-500/30",
@@ -141,7 +141,12 @@ export function AudioSlider({
           />
         </SliderPrimitive.Track>
         
-        <SliderPrimitive.Thumb className={thumbClasses} />
+        <SliderPrimitive.Thumb 
+          className={thumbClasses}
+          style={{
+            transition: isDragging ? 'none' : undefined
+          }}
+        />
       </SliderPrimitive.Root>
 
       {/* Progress percentage indicator */}
@@ -167,6 +172,7 @@ export function AudioSlider({
           className="absolute -top-8 transform -translate-x-1/2 bg-blue-600 text-white text-xs px-2 py-1 rounded pointer-events-none z-10 shadow-lg"
           style={{
             left: `${progress}%`,
+            transition: 'none'
           }}
         >
           {formatTime(currentTime)}

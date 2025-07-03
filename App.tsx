@@ -137,7 +137,7 @@ export default function App() {
       ) {
         try {
           console.log(
-            "🧭 Requesting iOS device orientation permission...",
+            "🧭 Requesting iOS device orientation permission..."
           );
           const permission = await (
             DeviceOrientationEvent as any
@@ -146,27 +146,27 @@ export default function App() {
           if (permission === "granted") {
             result.granted = true;
             console.log(
-              "✅ iOS device orientation permission granted",
+              "✅ iOS device orientation permission granted"
             );
           } else {
             result.error = `iOS permission ${permission}`;
             console.log(
               "❌ iOS device orientation permission denied:",
-              permission,
+              permission
             );
           }
         } catch (error) {
           result.error = `iOS permission error: ${error}`;
           console.error(
             "❌ Error requesting iOS device orientation permission:",
-            error,
+            error
           );
         }
       } else {
         // For Android and older iOS devices, permission is automatically granted
         result.granted = true;
         console.log(
-          "✅ Device orientation permission automatically granted (non-iOS 13+)",
+          "✅ Device orientation permission automatically granted (non-iOS 13+)"
         );
       }
 
@@ -188,7 +188,7 @@ export default function App() {
 
         if (isMobile) {
           console.log(
-            `📱 Mobile device detected, requesting device orientation permission for ${isTeaserRequest ? "teaser" : "full tour"} mode...`,
+            `📱 Mobile device detected, requesting device orientation permission for ${isTeaserRequest ? "teaser" : "full tour"} mode...`
           );
           const permissionResult =
             await requestDeviceOrientationPermission();
@@ -197,23 +197,23 @@ export default function App() {
           // Store permission in sessionStorage for the tour duration
           sessionStorage.setItem(
             "deviceOrientationPermission",
-            JSON.stringify(permissionResult),
+            JSON.stringify(permissionResult)
           );
 
           // Log the result for debugging
           if (permissionResult.granted) {
             console.log(
-              `🎉 Device orientation permission granted and stored for ${isTeaserRequest ? "teaser" : "full tour"} session`,
+              `🎉 Device orientation permission granted and stored for ${isTeaserRequest ? "teaser" : "full tour"} session`
             );
           } else {
             console.log(
               `⚠️ Device orientation permission not granted for ${isTeaserRequest ? "teaser" : "full tour"}:`,
-              permissionResult.error,
+              permissionResult.error
             );
           }
         } else {
           console.log(
-            `🖥️ Desktop device detected for ${isTeaserRequest ? "teaser" : "full tour"}, skipping device orientation permission`,
+            `🖥️ Desktop device detected for ${isTeaserRequest ? "teaser" : "full tour"}, skipping device orientation permission`
           );
           const desktopResult: DeviceOrientationPermissionState =
             {
@@ -224,7 +224,7 @@ export default function App() {
           setDeviceOrientationPermission(desktopResult);
           sessionStorage.setItem(
             "deviceOrientationPermission",
-            JSON.stringify(desktopResult),
+            JSON.stringify(desktopResult)
           );
         }
 
@@ -235,7 +235,7 @@ export default function App() {
       } catch (error) {
         console.error(
           `❌ Error during ${isTeaserRequest ? "teaser" : "full tour"} initialization:`,
-          error,
+          error
         );
         const errorResult: DeviceOrientationPermissionState = {
           granted: false,
@@ -252,8 +252,51 @@ export default function App() {
     [requestDeviceOrientationPermission],
   );
 
-  // Check for existing permission on component mount
+  // Force orientation permission request if supported but not yet requested
+  const requestOrientationPermissionIfNeeded = useCallback(async () => {
+    try {
+      // Check if DeviceOrientationEvent.requestPermission is available (iOS 13+)
+      const isIOS13Plus = typeof (DeviceOrientationEvent as any).requestPermission === 'function';
+      
+      // Check if we already tried requesting permission
+      const permissionState = deviceOrientationPermission;
+      
+      // Request permission if:
+      // 1. We're on iOS 13+ (needs explicit permission)
+      // 2. We haven't already requested permission
+      if (isIOS13Plus && (!permissionState.requested || !permissionState.granted)) {
+        console.log("🧭 Force-requesting device orientation permission for iOS");
+        const newPermissionState = await requestDeviceOrientationPermission();
+        setDeviceOrientationPermission(newPermissionState);
+        
+        // Store the new state
+        sessionStorage.setItem(
+          "deviceOrientationPermission",
+          JSON.stringify(newPermissionState)
+        );
+        
+        return newPermissionState;
+      }
+      
+      return permissionState;
+    } catch (error) {
+      console.error("Error checking orientation permission:", error);
+      return deviceOrientationPermission;
+    }
+  }, [deviceOrientationPermission, requestDeviceOrientationPermission]);
+  
+  // Check for browser compatibility on component mount
+  // and request permission on iOS specifically
   useEffect(() => {
+    // Detect if we're on iOS (where permission is needed)
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+    
+    if (isIOS) {
+      // Try to request permission on initial load for iOS
+      requestOrientationPermissionIfNeeded();
+    }
+    
+    // Check for existing permission in storage
     const storedPermission = sessionStorage.getItem(
       "deviceOrientationPermission",
     );
@@ -272,14 +315,14 @@ export default function App() {
         );
       }
     }
-  }, []);
+  }, [requestOrientationPermissionIfNeeded]);
 
   return (
-    <div className={`dark min-h-screen min-h-dvh bg-gradient-to-br from-slate-900 to-slate-800 ${APP_Z_LAYERS.BACKGROUND}`}>
-      {/* Mobile-First App Container - Consistent viewport for all modes */}
-      <div className="relative w-full min-h-screen min-h-dvh max-w-sm mx-auto sm:max-w-md md:max-w-lg lg:max-w-xl xl:max-w-2xl flex flex-col safe-top safe-bottom safe-left safe-right">
+    <div className={`dark min-h-screen min-h-dvh bg-gradient-to-br from-slate-900 to-slate-800 ${APP_Z_LAYERS.BACKGROUND} overflow-hidden fixed inset-0`}>
+      {/* Mobile-First App Container - Using fixed viewport height to prevent scrolling */}
+      <div className="fixed inset-0 w-full h-full max-w-none mx-auto flex flex-col safe-top safe-bottom safe-left safe-right">
           {/* Main Content Area - AudioPlayer fills available space */}
-          <div className={`flex-1 overflow-hidden ${APP_Z_LAYERS.MAIN_CONTENT}`}>
+          <div className={`flex-1 h-full overflow-hidden ${APP_Z_LAYERS.MAIN_CONTENT}`}>
             <AudioPlayer
               onAudioMessage={handleAudioMessage}
               deviceOrientationPermission={
@@ -291,7 +334,7 @@ export default function App() {
 
           {/* Landing Page Overlay - Renders on top when showLandingPage is true */}
           {showLandingPage && (
-            <div className={`absolute inset-0 ${APP_Z_LAYERS.LANDING_OVERLAY} bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex flex-col safe-top safe-bottom safe-left safe-right`}>
+            <div className={`fixed inset-0 ${APP_Z_LAYERS.LANDING_OVERLAY} bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex flex-col safe-top safe-bottom safe-left safe-right`}>
               {/* Landing Page Content */}
               <div className="flex-1 flex flex-col justify-between p-4 pt-12 sm:p-6 sm:pt-16 md:p-8 md:pt-20">
                 {/* Top Section - Logo and Title */}
