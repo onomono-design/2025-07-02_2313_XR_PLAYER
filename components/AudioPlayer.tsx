@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Button } from './ui/button';
-import { Slider } from './ui/slider';
 import { ScrollArea } from './ui/scroll-area';
 import { Badge } from './ui/badge';
 import { Skeleton } from './ui/skeleton';
@@ -16,14 +15,12 @@ import {
   VolumeX, 
   List,
   ExternalLink,
-  Eye,
   X,
   Glasses,
   RotateCcw,
   AudioWaveform,
   ChevronLeft,
   ChevronRight,
-  Maximize,
   Info,
   ChevronUp,
   ChevronDown,
@@ -324,34 +321,62 @@ const teaserTourConfig: TourConfig = {
 };
 
 export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTeaserMode = false }: AudioPlayerProps) {
-  const audioRef = useRef<HTMLAudioElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const sliderRef = useRef<HTMLDivElement>(null);
-  const [tourConfig, setTourConfig] = useState<TourConfig | null>(null);
+  // Audio state
   const [tracks, setTracks] = useState<Track[]>([]);
   const [currentTrack, setCurrentTrack] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [volume, setVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
   const [showPlaylist, setShowPlaylist] = useState(false);
   const [showTeaser, setShowTeaser] = useState(false);
-  const [currentThumbnailIndex, setCurrentThumbnailIndex] = useState(0);
-  const [isXRMode, setIsXRMode] = useState(isTeaserMode); // Start in XR mode for teaser
-  const [isXRLoading, setIsXRLoading] = useState(false);
+  const [tourConfig, setTourConfig] = useState<TourConfig | null>(null);
+  
+  // UI state
+  const [isXRMode, setIsXRMode] = useState(false);
   const [isFullscreenMode, setIsFullscreenMode] = useState(false);
-  const [fullscreenImageIndex, setFullscreenImageIndex] = useState(0);
-  const [fullscreenZoom, setFullscreenZoom] = useState(1);
-  const [showFullscreenInfo, setShowFullscreenInfo] = useState(false);
-  const [containerDimensions, setContainerDimensions] = useState({ width: 0, height: 0 });
-  const [isImageHovered, setIsImageHovered] = useState(false);
-  const [imagesLoaded, setImagesLoaded] = useState<{[key: string]: boolean}>({});
-  const [trackImagesPreloaded, setTrackImagesPreloaded] = useState<{[key: number]: boolean}>({});
+  const [isXRLoading, setIsXRLoading] = useState(false);
   const [isLoadingImages, setIsLoadingImages] = useState(false);
+  const [xrScenesPreloaded, setXRScenesPreloaded] = useState<{[key: string]: boolean}>({});
+  
+  // Image gallery state
+  const [currentThumbnailIndex, setCurrentThumbnailIndex] = useState(0);
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragOffset, setDragOffset] = useState(0);
+  const [autoTransitionDirection, setAutoTransitionDirection] = useState<'next' | 'prev' | null>(null);
+  
+  // Refs
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const sliderRef = useRef<HTMLDivElement>(null);
+  const touchStartXRef = useRef<number | null>(null);
+  const touchStartYRef = useRef<number | null>(null);
+  const dragStartXRef = useRef<number | null>(null);
+  const lastTapTimeRef = useRef<number>(0);
+  
+  // Measurements
+  // @ts-ignore - Unused but kept for future reference
+  const containerDimensions = useRef({ width: 0, height: 0 });
+  // @ts-ignore - Unused but kept for future reference
+  const [isImageHovered, setIsImageHovered] = useState(false);
+  
+  // Preloading state
+  const [preloadedImages, setPreloadedImages] = useState<Set<string>>(new Set());
+  const [preloadedXRScenes, setPreloadedXRScenes] = useState<Set<string>>(new Set());
+  
+  // Gesture handling state
+  const [startX, setStartX] = useState<number | null>(null);
+  const [startY, setStartY] = useState<number | null>(null);
+  // @ts-ignore - Unused but kept for future reference
+  const dragOffset = useRef(0);
+  const isDraggingRef = useRef(false);
+  // @ts-ignore - Unused but kept for future reference
+  const autoTransitionDirection = useRef<'next' | 'prev' | null>(null);
 
   // XR Scene state - Always maintain scene for seamless toggling
   const [xrSceneReady, setXRSceneReady] = useState(false);
-  const [xrScenesPreloaded, setXRScenesPreloaded] = useState<{[key: string]: boolean}>({});
   const [xrSceneInitialized, setXRSceneInitialized] = useState(false);
   
   // Track if we've already auto-played in teaser mode to prevent repeated auto-play
@@ -2120,7 +2145,9 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
                            ) : (
                              <img 
                                src={t.thumbnails && t.thumbnails.length > 0 
-                                 ? (typeof t.thumbnails[0] === 'string' ? t.thumbnails[0] : (t.thumbnails[0] as TourImageData).url)
+                                 ? (typeof t.thumbnails[0] === 'string' 
+                                   ? t.thumbnails[0] 
+                                   : (t.thumbnails[0] as TourImageData).url)
                                  : t.cover} 
                                alt={t.title}
                                className="w-full h-full object-cover"

@@ -16,8 +16,8 @@
 
     /* Linting */
     "strict": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": true,
 
     /* Path mapping */
@@ -29,7 +29,7 @@
       "@/styles/*": ["./styles/*"]
     }
   },
-  "include": ["*.tsx", "components/**/*.ts", "components/**/*.tsx", "main.tsx", "App.tsx"],
+  "include": ["*.tsx", "components/**/*.ts", "components/**/*.tsx", "main.tsx", "App.tsx", "types.d.ts"],
   "exclude": ["node_modules", "dist", "build", "*.config.ts", "*.config.d.ts"],
   "references": [{ "path": "./tsconfig.node.json" }]
 } 

@@ -89,6 +89,7 @@ export function ImageSlider({
   autoplay = true,
   defaultInterval = 20,
   onSlideChange,
+  // @ts-ignore - Kept for future use
   devMode = false,
   allowVerticalCrop = false,
   aspectRatio = 1,

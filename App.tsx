@@ -109,7 +109,7 @@ export default function App() {
         );
         break;
       default:
-        console.log("📨 360° Viewer: Unknown message type:", message.type, message.data);
+        console.log("📨 360° Viewer: Unknown message type:", (message as any).type, (message as any).data);
     }
   };
 
