@@ -1,0 +1,120 @@
+{
+  "tour": {
+    "tourName": "Historic Downtown Walking Tour",
+    "description": "Explore the rich history of our downtown district through immersive audio stories",
+    "totalChapters": 5,
+    "chapters": [
+      {
+        "chapterName": "Welcome to Chinatown",
+        "chapterOrder": 1,
+        "tourName": "Historic Downtown Walking Tour",
+        "chapterScript": "Welcome to our historic Chinatown district. As you explore this vibrant neighborhood, you'll discover the rich cultural heritage and fascinating stories that have shaped this community for over a century.",
+        "audio_src": "https://cmm-cloud-2.s3.us-west-1.amazonaws.com/WALKING+TOURS/2025-03-15-CHINATOWN/2025-03-15-CHINATOWN-MP3S/2025-03-14-CHINATOWN-003-COMPRESSED.mp3",
+        "isXR": true,
+        "xr_src": "https://cmm-cloud-2.s3.us-west-1.amazonaws.com/2025-06-06_HLS-CHUNKING-TEST/master.m3u8",
+        "thumbnail": [
+          {
+            "url": "https://images.unsplash.com/photo-1449824913935-59a10b8d2000?w=400&h=400&fit=crop&crop=center",
+            "title": "Main Street Historic District",
+            "description": "The heart of Main Street with its original 1876 cobblestone pavement. These stones were quarried locally and have witnessed countless parades, celebrations, and daily life moments over nearly 150 years."
+          },
+          {
+            "url": "https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?w=400&h=400&fit=crop&crop=center",
+            "title": "Victorian Architecture Detail",
+            "description": "Notice the intricate brickwork and ornate window trim typical of 1880s commercial buildings. The cast iron details were manufactured in nearby foundries and represent the prosperity of the railroad era."
+          },
+          {
+            "url": "https://images.unsplash.com/photo-1486325212027-8081e485255e?w=400&h=400&fit=crop&crop=center",
+            "title": "Historic Street Lamps",
+            "description": "These reproduction gas lamps were installed in 1976 for the nation's bicentennial celebration. They replaced the original 1890s electric street lights, which were among the first municipal electric lighting in the region."
+          }
+        ],
+        "isTeaser": false,
+        "outroCTA_timeIn": "",
+        "outroCTA_backlink": ""
+      },
+      {
+        "chapterName": "The Old Town Square",
+        "chapterOrder": 2,
+        "tourName": "Historic Downtown Walking Tour",
+        "chapterScript": "The town square before you has been the heart of our community for generations. In 1885, this was where farmers would gather every Saturday to sell their produce. The fountain in the center was added in 1902 to commemorate our town's silver anniversary.",
+        "audio_src": "https://www.soundjay.com/misc/sounds/bell-ringing-05.wav",
+        "isXR": false,
+        "xr_src": "",
+        "thumbnail": [
+          {
+            "url": "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=400&h=400&fit=crop&crop=center",
+            "title": "Town Square Plaza",
+            "description": "The central plaza where farmers gathered every Saturday from 1885 to 1945. The original wooden platform where auctioneers stood was replaced by this beautiful brick pavilion in 1923."
+          },
+          {
+            "url": "https://images.unsplash.com/photo-1519751138087-5bf79df62d5b?w=400&h=400&fit=crop&crop=center",
+            "title": "Memorial Fountain",
+            "description": "Dedicated in 1902 to commemorate the town's 25th anniversary. The bronze plaques honor the founding families, while the fountain itself was designed by renowned sculptor Margaret Chen."
+          }
+        ],
+        "isTeaser": true,
+        "outroCTA_timeIn": "03:20",
+        "outroCTA_backlink": "https://example.com/full-tour-purchase"
+      },
+      {
+        "chapterName": "The Historic Bank Building",
+        "chapterOrder": 3,
+        "tourName": "Historic Downtown Walking Tour",
+        "chapterScript": "This imposing brick structure served as our town's first bank from 1890 to 1965. The ornate Victorian architecture was considered quite modern for its time. During the Great Depression, this building became a symbol of hope and stability for our community.",
+        "audio_src": "https://www.soundjay.com/misc/sounds/bell-ringing-05.wav",
+        "isXR": true,
+        "xr_src": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
+        "thumbnail": [
+          {
+            "url": "https://images.unsplash.com/photo-1571330735066-03aaa9429d89?w=400&h=400&fit=crop&crop=center",
+            "title": "Bank Building Facade",
+            "description": "The impressive Richardsonian Romanesque architecture features locally quarried sandstone and handcrafted ironwork. The building cost $45,000 to construct in 1890 - equivalent to over $1.5 million today."
+          },
+          "https://images.unsplash.com/photo-1494475673543-6a6a27143fc8?w=400&h=400&fit=crop&crop=center",
+          {
+            "url": "https://images.unsplash.com/photo-1448317971280-6c74e016e49c?w=400&h=400&fit=crop&crop=center",
+            "title": "Banking Hall Interior",
+            "description": "The marble floors and brass fixtures remain original to the 1890 construction. The massive vault door weighs over 2 tons and was manufactured by the Mosler Safe Company of Hamilton, Ohio."
+          }
+        ],
+        "isTeaser": false,
+        "outroCTA_timeIn": "",
+        "outroCTA_backlink": ""
+      },
+      {
+        "chapterName": "The Heritage Theater",
+        "chapterOrder": 4,
+        "tourName": "Historic Downtown Walking Tour",
+        "chapterScript": "Built in 1923, this art deco theater was the crown jewel of our downtown entertainment district. Charlie Chaplin himself performed here in 1924. The neon marquee you see was restored to its original glory in 1998 by community volunteers.",
+        "audio_src": "https://www.soundjay.com/misc/sounds/bell-ringing-05.wav",
+        "isXR": false,
+        "xr_src": "",
+        "thumbnail": [
+          "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=400&h=400&fit=crop&crop=center",
+          "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=400&fit=crop&crop=center"
+        ],
+        "isTeaser": true,
+        "outroCTA_timeIn": "02:45",
+        "outroCTA_backlink": "https://example.com/theater-tickets"
+      },
+      {
+        "chapterName": "Riverside Park",
+        "chapterOrder": 5,
+        "tourName": "Historic Downtown Walking Tour",
+        "chapterScript": "Our walking tour concludes at Riverside Park, established in 1912. This peaceful green space along the river has been a gathering place for families for over a century. The oak trees you see were planted by the school children of 1915 as part of a beautification project.",
+        "audio_src": "https://www.soundjay.com/misc/sounds/bell-ringing-05.wav",
+        "isXR": true,
+        "xr_src": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
+        "thumbnail": [
+          "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400&h=400&fit=crop&crop=center",
+          "https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=400&h=400&fit=crop&crop=center",
+          "https://images.unsplash.com/photo-1500622944204-b135684e99fd?w=400&h=400&fit=crop&crop=center"
+        ],
+        "isTeaser": false,
+        "outroCTA_timeIn": "",
+        "outroCTA_backlink": ""
+      }
+    ]
+  }
+}

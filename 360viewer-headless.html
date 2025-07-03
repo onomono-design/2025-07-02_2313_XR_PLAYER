@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>360° Headless Viewer</title>
+    <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@1.4.10/dist/hls.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background: #000;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        
+        #viewer-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+        
+        a-scene {
+            width: 100%;
+            height: 100%;
+        }
+        
+        /* Hide A-Frame inspector button and VR button */
+        .a-inspect-button,
+        .a-enter-vr-button {
+            display: none !important;
+        }
+        
+        /* Loading overlay */
+        #loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            display: none; /* Start hidden since parent shows its own loading */
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            transition: opacity 0.3s ease;
+        }
+        
+        #loading-overlay.show {
+            display: flex;
+            opacity: 1;
+        }
+        
+        #loading-overlay.hidden {
+            display: none;
+            opacity: 0;
+            pointer-events: none;
+        }
+        
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-top: 3px solid #fff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .loading-text {
+            color: white;
+            margin-top: 16px;
+            font-size: 14px;
+        }
+        
+        /* Error overlay */
+        #error-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(139, 69, 19, 0.9);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 101;
+            flex-direction: column;
+        }
+        
+        .error-icon {
+            width: 40px;
+            height: 40px;
+            background: #ff4444;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 20px;
+            margin-bottom: 16px;
+        }
+        
+        .error-text {
+            color: white;
+            font-size: 14px;
+            text-align: center;
+            max-width: 300px;
+        }
+    </style>
+</head>
+<body>
+    <div id="loading-overlay">
+        <div style="text-align: center;">
+            <div class="loading-spinner"></div>
+            <div class="loading-text">Loading 360° Experience...</div>
+        </div>
+    </div>
+    
+    <div id="error-overlay">
+        <div class="error-icon">!</div>
+        <div class="error-text" id="error-message">
+            Failed to load 360° video. Please check the video URL and try again.
+        </div>
+    </div>
+    
+    <div id="viewer-container">
+        <a-scene
+            id="scene"
+            embedded
+            vr-mode-ui="enabled: false"
+            device-orientation-permission-ui="enabled: false">
+            
+            <a-assets>
+                <video
+                    id="video-asset"
+                    crossorigin="anonymous"
+                    playsinline
+                    preload="auto"
+                    muted>
+                </video>
+            </a-assets>
+            
+            <a-videosphere
+                id="videosphere"
+                src="#video-asset"
+                rotation="0 0 0">
+            </a-videosphere>
+            
+            <a-camera
+                id="camera"
+                look-controls="enabled: true; pointerLockEnabled: false"
+                wasd-controls="enabled: false"
+                position="0 0 0"
+                fov="75">
+            </a-camera>
+        </a-scene>
+    </div>
+
+    <script>
+        class Viewer360 {
+            constructor() {
+                this.scene = null;
+                this.camera = null;
+                this.videosphere = null;
+                this.video = null;
+                this.hlsPlayer = null;
+                this.isReady = false;
+                this.isSceneReady = false;
+                this.isVideoReady = false;
+                this.isPlaying = false;
+                this.currentTime = 0;
+                this.videoUrl = '';
+                this.parentOrigin = '*';
+                this.lastHeartbeat = 0;
+                this.connectionHealth = true;
+                
+                this.init();
+            }
+            
+            init() {
+                // Get URL parameters
+                const params = new URLSearchParams(window.location.search);
+                this.videoUrl = params.get('video') || '';
+                this.parentOrigin = params.get('origin') || '*';
+                
+                // Initialize A-Frame scene
+                this.scene = document.querySelector('#scene');
+                this.camera = document.querySelector('#camera');
+                this.videosphere = document.querySelector('#videosphere');
+                this.video = document.querySelector('#video-asset');
+                
+                this.setupEventListeners();
+                this.setupMessageHandling();
+                
+                // Auto-preload if specified
+                if (params.get('autoPreload') === 'true' && this.videoUrl) {
+                    this.loadVideo(this.videoUrl);
+                }
+                
+                // Don't automatically mark as ready - wait for both scene and video
+            }
+            
+            setupEventListeners() {
+                // Video events
+                this.video.addEventListener('loadstart', () => {
+                    this.sendToParent('loading', { isLoading: true });
+                });
+                
+                this.video.addEventListener('loadedmetadata', () => {
+                    this.sendToParent('loaded', { 
+                        duration: this.video.duration,
+                        videoUrl: this.videoUrl 
+                    });
+                });
+                
+                this.video.addEventListener('canplaythrough', () => {
+                    this.isVideoReady = true;
+                    this.hideLoading();
+                    // Only send ready message if both scene and video are ready
+                    this.checkAndSendReady();
+                });
+                
+                this.video.addEventListener('play', () => {
+                    this.isPlaying = true;
+                    this.sendToParent('play', { currentTime: this.video.currentTime });
+                });
+                
+                this.video.addEventListener('pause', () => {
+                    this.isPlaying = false;
+                    this.sendToParent('pause', { currentTime: this.video.currentTime });
+                });
+                
+                this.video.addEventListener('timeupdate', () => {
+                    this.currentTime = this.video.currentTime;
+                    this.sendToParent('time-update', { 
+                        currentTime: this.currentTime,
+                        duration: this.video.duration 
+                    });
+                });
+                
+                this.video.addEventListener('seeking', () => {
+                    this.sendToParent('seeking', { currentTime: this.video.currentTime });
+                });
+                
+                this.video.addEventListener('seeked', () => {
+                    this.sendToParent('seeked', { currentTime: this.video.currentTime });
+                });
+                
+                this.video.addEventListener('waiting', () => {
+                    this.sendToParent('buffering', { isBuffering: true });
+                });
+                
+                this.video.addEventListener('playing', () => {
+                    this.sendToParent('buffering', { isBuffering: false });
+                });
+                
+                this.video.addEventListener('error', (e) => {
+                    console.error('360° Viewer - Video error:', e);
+                    let errorMessage = 'Video playback error';
+                    if (this.video.error) {
+                        switch (this.video.error.code) {
+                            case MediaError.MEDIA_ERR_NETWORK:
+                                errorMessage = 'Network error - check your connection';
+                                break;
+                            case MediaError.MEDIA_ERR_DECODE:
+                                errorMessage = 'Video format not supported';
+                                break;
+                            case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED:
+                                errorMessage = 'Video source not found or not supported';
+                                break;
+                            default:
+                                errorMessage = 'Video playback error';
+                        }
+                    }
+                    this.showError(errorMessage);
+                    this.sendToParent('error', { error: errorMessage });
+                });
+                
+                // Camera FOV changes
+                this.camera.addEventListener('componentchanged', (e) => {
+                    if (e.detail.name === 'camera') {
+                        const fov = this.camera.getAttribute('camera').fov;
+                        this.sendToParent('fovchange', { fov });
+                    }
+                });
+                
+                // Scene ready - but don't send ready until video is also ready
+                this.scene.addEventListener('loaded', () => {
+                    this.isSceneReady = true;
+                    
+                    // If there's no video URL, we can mark the scene as ready
+                    if (!this.videoUrl) {
+                        this.markAsReady();
+                    } else {
+                        // Otherwise wait for both scene and video
+                        this.checkAndSendReady();
+                    }
+                });
+                
+                // Immediate fallback for no-video case (removed artificial delay)
+                if (!this.videoUrl) {
+                    console.log('360° Viewer - ⚠️ No video URL provided, marking scene-only as ready');
+                    this.isVideoReady = true; // Force video ready for no-video case
+                    this.checkAndSendReady();
+                }
+            }
+            
+            setupMessageHandling() {
+                window.addEventListener('message', (event) => {
+                    // Skip messages that aren't for us
+                    if (!event.data || !event.data.channel || event.data.channel !== 'viewer-360') {
+                        return;
+                    }
+                    
+                    const data = event.data;
+                    
+                    switch(data.type) {
+                        case 'init':
+                            this.handleInit(data);
+                            break;
+                            
+                        case 'playback-state':
+                            this.handlePlaybackState(data);
+                            break;
+                            
+                        case 'time-update':
+                            this.handleTimeUpdate(data);
+                            break;
+                            
+                        case 'seek':
+                            if (data.currentTime !== undefined) {
+                                this.video.currentTime = data.currentTime;
+                                this.sendToParent('seek', { currentTime: data.currentTime });
+                            }
+                            break;
+                            
+                        case 'track-change':
+                            this.handleTrackChange(data);
+                            break;
+                            
+                        case 'recenter':
+                            this.recenterCamera();
+                            break;
+                            
+                        case 'resize':
+                            // Handle resize events if needed
+                            break;
+                            
+                        case 'heartbeat':
+                            this.sendToParent('heartbeat-response', { 
+                                timestamp: performance.now(),
+                                originalTimestamp: data.timestamp 
+                            });
+                            break;
+                            
+                        case 'set-inverse-controls':
+                            if (this.camera && this.camera.components['look-controls']) {
+                                const lookControls = this.camera.components['look-controls'];
+                                if (data.inverseX !== undefined) {
+                                    lookControls.data.reverseMouseDrag = data.inverseX;
+                                }
+                                if (data.inverseY !== undefined) {
+                                    lookControls.data.reverseTouchDrag = data.inverseY;
+                                }
+                            }
+                            break;
+                            
+                        default:
+                            break;
+                    }
+                });
+            }
+            
+            handleInit(data) {
+                if (!data.data) return;
+                
+                const { videoUrl, currentTime, isPlaying, deviceOrientationPermission } = data.data;
+                
+                if (videoUrl && videoUrl !== this.videoUrl) {
+                    this.loadVideo(videoUrl);
+                }
+                
+                if (currentTime !== undefined) {
+                    this.video.currentTime = currentTime;
+                }
+                
+                if (isPlaying) {
+                    this.playVideo();
+                } else {
+                    this.pauseVideo();
+                }
+                
+                // Update device orientation permission state
+                if (deviceOrientationPermission) {
+                    this.updateDeviceOrientation(deviceOrientationPermission);
+                }
+            }
+            
+            handlePlaybackState(data) {
+                if (!data.data) return;
+                
+                const { isPlaying, currentTime, deviceOrientationPermission } = data.data;
+                
+                // If time is significantly different, sync it
+                if (currentTime !== undefined && Math.abs(this.video.currentTime - currentTime) > 0.5) {
+                    this.video.currentTime = currentTime;
+                }
+                
+                if (isPlaying && this.video.paused) {
+                    this.playVideo();
+                } else if (!isPlaying && !this.video.paused) {
+                    this.pauseVideo();
+                }
+                
+                // Update device orientation permission state
+                if (deviceOrientationPermission) {
+                    this.updateDeviceOrientation(deviceOrientationPermission);
+                }
+            }
+            
+            handleTimeUpdate(data) {
+                if (!data.data || data.data.currentTime === undefined) return;
+                
+                // Only sync time if it's significantly different from current time
+                const newTime = data.data.currentTime;
+                if (Math.abs(this.video.currentTime - newTime) > 0.5) {
+                    this.video.currentTime = newTime;
+                }
+            }
+            
+            handleTrackChange(data) {
+                if (!data.data) return;
+                
+                const { videoUrl, currentTime = 0 } = data.data;
+                
+                if (videoUrl && videoUrl !== this.videoUrl) {
+                    this.loadVideo(videoUrl);
+                    
+                    // Set the time to the beginning or specified time
+                    if (currentTime !== undefined) {
+                        this.video.currentTime = currentTime;
+                    }
+                }
+            }
+            
+            loadVideo(videoUrl) {
+                if (!videoUrl) {
+                    this.showError('No video URL provided');
+                    return;
+                }
+                
+                this.videoUrl = videoUrl;
+                this.showLoading();
+                
+                // Reset video state
+                this.isVideoReady = false;
+                
+                // Clear video src
+                if (this.hlsPlayer) {
+                    this.hlsPlayer.destroy();
+                    this.hlsPlayer = null;
+                }
+                
+                this.video.pause();
+                this.video.removeAttribute('src');
+                this.video.load();
+                
+                // Check if it's an HLS stream (.m3u8)
+                if (videoUrl.includes('.m3u8')) {
+                    // Use HLS.js if supported
+                    if (Hls.isSupported()) {
+                        const hls = new Hls({
+                            maxBufferLength: 60,
+                            maxMaxBufferLength: 60,
+                            capLevelToPlayerSize: true,
+                            startLevel: -1, // Auto quality
+                            testBandwidth: true
+                        });
+                        
+                        hls.loadSource(videoUrl);
+                        hls.attachMedia(this.video);
+                        
+                        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                            this.sendToParent('hls-manifest-parsed', {
+                                levels: hls.levels.length
+                            });
+                        });
+                        
+                        hls.on(Hls.Events.ERROR, (event, data) => {
+                            if (data.fatal) {
+                                switch(data.type) {
+                                    case Hls.ErrorTypes.NETWORK_ERROR:
+                                        hls.startLoad();
+                                        break;
+                                    case Hls.ErrorTypes.MEDIA_ERROR:
+                                        hls.recoverMediaError();
+                                        break;
+                                    default:
+                                        this.showError('HLS playback error: ' + data.details);
+                                        break;
+                                }
+                            }
+                        });
+                        
+                        this.hlsPlayer = hls;
+                    }
+                    // Use native HLS support in Safari/iOS
+                    else if (this.video.canPlayType('application/vnd.apple.mpegurl')) {
+                        this.video.src = videoUrl;
+                    } else {
+                        this.showError('HLS not supported on this browser');
+                        return;
+                    }
+                } else {
+                    // Regular video
+                    this.video.src = videoUrl;
+                }
+            }
+            
+            recenterCamera() {
+                if (!this.camera) return;
+                
+                // Reset camera rotation
+                this.camera.setAttribute('rotation', '0 0 0');
+                
+                // If using look-controls, also reset those
+                if (this.camera.components['look-controls']) {
+                    const lookControls = this.camera.components['look-controls'];
+                    if (lookControls.pitchObject) lookControls.pitchObject.rotation.x = 0;
+                    if (lookControls.yawObject) lookControls.yawObject.rotation.y = 0;
+                }
+            }
+            
+            checkAndSendReady() {
+                if (this.isSceneReady && (this.isVideoReady || !this.videoUrl)) {
+                    this.sendToParent('ready', {
+                        isReady: true,
+                        videoUrl: this.videoUrl
+                    });
+                }
+            }
+            
+            showLoading() {
+                document.getElementById('loading-overlay').classList.add('show');
+                document.getElementById('loading-overlay').classList.remove('hidden');
+            }
+            
+            hideLoading() {
+                document.getElementById('loading-overlay').classList.remove('show');
+                document.getElementById('loading-overlay').classList.add('hidden');
+            }
+            
+            showError(message) {
+                const errorOverlay = document.getElementById('error-overlay');
+                const errorMessage = document.getElementById('error-message');
+                
+                errorMessage.textContent = message || 'Error loading 360° video.';
+                errorOverlay.style.display = 'flex';
+                
+                this.sendToParent('error', { error: message });
+            }
+            
+            hideError() {
+                document.getElementById('error-overlay').style.display = 'none';
+            }
+            
+            playVideo() {
+                if (this.video.paused) {
+                    this.video.play().catch(error => {
+                        this.showError('Cannot play video: ' + error.message);
+                    });
+                }
+            }
+            
+            pauseVideo() {
+                if (!this.video.paused) {
+                    this.video.pause();
+                }
+            }
+            
+            sendToParent(type, data = {}) {
+                window.parent.postMessage({
+                    channel: 'viewer-360',
+                    type: type,
+                    timestamp: performance.now(),
+                    ...data
+                }, '*');
+            }
+            
+            updateDeviceOrientation(permissionState) {
+                if (!this.camera || !this.camera.components['look-controls']) return;
+                
+                const lookControls = this.camera.components['look-controls'];
+                
+                // Enable/disable device orientation based on permission state
+                if (permissionState.granted) {
+                    lookControls.data.magicWindowEnabled = true;
+                    lookControls.data.magicWindowTrackingEnabled = true;
+                } else {
+                    lookControls.data.magicWindowEnabled = false;
+                    lookControls.data.magicWindowTrackingEnabled = false;
+                }
+                
+                // Force update of look-controls component
+                if (lookControls.updateMagicWindowOrientation) {
+                    lookControls.updateMagicWindowOrientation();
+                }
+            }
+        }
+        
+        // Initialize the viewer when the DOM is ready
+        document.addEventListener('DOMContentLoaded', () => {
+            window.viewer360 = new Viewer360();
+        });
+        
+        // Expose preload method
+        window.viewer360 = {
+            preload: (videoUrl) => {
+                if (window.viewer360 && window.viewer360.loadVideo) {
+                    window.viewer360.loadVideo(videoUrl);
+                }
+            },
+            isReady: () => {
+                return window.viewer360 && window.viewer360.isReady;
+            }
+        };
+    </script>
+</body>
+</html> 
