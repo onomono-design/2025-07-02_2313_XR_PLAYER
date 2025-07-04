@@ -1424,8 +1424,20 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
 
   // Check if XR should show permission warning (only on mobile devices)
   const shouldShowXRPermissionWarning = () => {
-    // Only show warning on mobile devices where orientation is actually supported
-    return track.isXR && deviceOrientationPermission && !deviceOrientationPermission.granted && deviceOrientationPermission.supported && /Mobi|Android/i.test(navigator.userAgent);
+    // Only show warning if:
+    // 1. Current track supports XR
+    // 2. We have permission data
+    // 3. Permission was requested but not granted
+    // 4. Device supports orientation
+    // 5. User is on a mobile device
+    return (
+      track.isXR && 
+      deviceOrientationPermission && 
+      deviceOrientationPermission.requested && 
+      !deviceOrientationPermission.granted && 
+      deviceOrientationPermission.supported && 
+      /Mobi|Android/i.test(navigator.userAgent)
+    );
   };
 
 

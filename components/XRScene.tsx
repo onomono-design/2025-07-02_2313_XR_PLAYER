@@ -267,6 +267,17 @@ export function XRScene({
             initializationTimeoutRef.current = null;
           }
           
+          // Send permission state to viewer immediately after ready
+          if (deviceOrientationPermission) {
+            console.log('🎯 Sending permission state to viewer:', deviceOrientationPermission);
+            sendToViewer('setOrientationPermission', {
+              granted: deviceOrientationPermission.granted,
+              requested: deviceOrientationPermission.requested,
+              supported: deviceOrientationPermission.supported,
+              error: deviceOrientationPermission.error
+            });
+          }
+          
           // Initialize viewer with current state
           if (videoSrc) {
             console.log('🎯 Initializing viewer with:', { videoSrc, currentTime, isPlaying });
@@ -401,7 +412,21 @@ export function XRScene({
           break;
 
         case 'orientationpermission':
-          console.log('📱 Device orientation permission:', message.granted);
+          console.log('📱 Device orientation permission from viewer:', message.granted);
+          // Don't override the main app's permission state - this is just for logging
+          break;
+
+        case 'orientationrequested':
+          console.log('📱 Viewer requested orientation permission - but this should be handled by main app');
+          // Send the current permission state back to viewer
+          if (deviceOrientationPermission) {
+            sendToViewer('setOrientationPermission', {
+              granted: deviceOrientationPermission.granted,
+              requested: deviceOrientationPermission.requested,
+              supported: deviceOrientationPermission.supported,
+              error: deviceOrientationPermission.error
+            });
+          }
           break;
 
         case 'connectionhealthresponse':
@@ -440,7 +465,20 @@ export function XRScene({
 
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, [onReady, onSeek, currentTime, isPlaying, videoSrc, sendToViewer]);
+  }, [onReady, onSeek, currentTime, isPlaying, videoSrc, sendToViewer, deviceOrientationPermission]);
+
+  // Send device orientation permission to viewer when it changes
+  useEffect(() => {
+    if (isViewerReady && deviceOrientationPermission) {
+      console.log('�� Device orientation permission changed, sending to viewer:', deviceOrientationPermission);
+      sendToViewer('setOrientationPermission', {
+        granted: deviceOrientationPermission.granted,
+        requested: deviceOrientationPermission.requested,
+        supported: deviceOrientationPermission.supported,
+        error: deviceOrientationPermission.error
+      });
+    }
+  }, [deviceOrientationPermission, isViewerReady, sendToViewer]);
 
   // Sync playback state with viewer
   useEffect(() => {

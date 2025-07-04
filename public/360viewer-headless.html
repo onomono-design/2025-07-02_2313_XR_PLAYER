@@ -137,7 +137,9 @@
             id="scene"
             embedded
             vr-mode-ui="enabled: false"
-            device-orientation-permission-ui="enabled: true">
+            device-orientation-permission-ui="enabled: true"
+            renderer="colorManagement: true; gammaOutput: true; sortObjects: true; physicallyCorrectLights: true"
+            background="color: #000000">
             
             <a-assets>
                 <video
@@ -152,7 +154,9 @@
             <a-videosphere
                 id="videosphere"
                 src="#video-asset"
-                rotation="0 0 0">
+                rotation="0 0 0"
+                material="colorCorrection: true; tone-mapping: linear"
+                mobile-color-fix>
             </a-videosphere>
             
             <a-camera
@@ -166,6 +170,45 @@
     </div>
 
     <script>
+        // Custom A-Frame component for mobile color correction
+        AFRAME.registerComponent('mobile-color-fix', {
+            init: function() {
+                console.log('🎯 Initializing mobile color fix');
+                
+                // Get the video element and material
+                const videoEl = document.querySelector('#video-asset');
+                const videosphere = document.querySelector('#videosphere');
+                
+                if (videoEl && videosphere) {
+                    // Wait for video to load
+                    videoEl.addEventListener('loadeddata', () => {
+                        console.log('🎯 Applying mobile color correction');
+                        
+                        // Get the Three.js material
+                        const mesh = videosphere.getObject3D('mesh');
+                        if (mesh && mesh.material) {
+                            // Ensure proper color space
+                            if (videoEl.videoWidth > 0) {
+                                // Create a new texture with proper color space
+                                const texture = new THREE.VideoTexture(videoEl);
+                                texture.colorSpace = THREE.SRGBColorSpace;
+                                texture.format = THREE.RGBFormat;
+                                texture.minFilter = THREE.LinearFilter;
+                                texture.magFilter = THREE.LinearFilter;
+                                texture.flipY = false;
+                                
+                                // Apply to material
+                                mesh.material.map = texture;
+                                mesh.material.needsUpdate = true;
+                                
+                                console.log('🎯 Mobile color correction applied');
+                            }
+                        }
+                    });
+                }
+            }
+        });
+
         class HeadlessViewer360 {
             constructor() {
                 this.scene = null;
@@ -236,8 +279,8 @@
                 this.detectDeviceCapabilities();
                 this.detectNetworkQuality();
                 
-                // Request device orientation permission if needed
-                this.requestDeviceOrientationPermission();
+                // DON'T automatically request device orientation permission - wait for main app
+                // this.requestDeviceOrientationPermission(); // REMOVED
                 
                 // Auto-preload if specified
                 if (this.autoStart && this.videoUrl) {
@@ -417,7 +460,7 @@
                             this.switchChapter(data.chapterNumber, data.videoUrl);
                             break;
                         case 'setOrientationPermission':
-                            this.setOrientationPermission(data.value);
+                            this.setOrientationPermission(data);
                             break;
                         case 'requestOrientationPermission':
                             this.requestDeviceOrientationPermission();
@@ -705,9 +748,26 @@
                 this.setVideoSource(videoUrl);
             }
             
-            setOrientationPermission(value) {
-                this.orientationPermission = value;
-                console.log('🎯 Device orientation permission set to:', value);
+            setOrientationPermission(permissionData) {
+                console.log('🎯 Setting orientation permission from main app:', permissionData);
+                
+                // Update local permission state
+                this.orientationPermission = permissionData.granted ? 'granted' : 'denied';
+                
+                // Send confirmation back to main app
+                this.sendMessage('orientationpermission', {
+                    granted: permissionData.granted,
+                    requested: permissionData.requested,
+                    supported: permissionData.supported,
+                    error: permissionData.error,
+                    source: 'main-app'
+                });
+                
+                // Update A-Frame scene if needed
+                if (this.camera && permissionData.granted) {
+                    // Enable device orientation controls if permission granted
+                    this.camera.setAttribute('look-controls', 'enabled: true; pointerLockEnabled: false; magicWindowTrackingEnabled: true; reverseMouseDrag: true; reverseTouchDrag: true');
+                }
             }
             
             loadVideo(url) {
@@ -905,24 +965,30 @@
             }
             
             async requestDeviceOrientationPermission() {
+                // This method is now only called if the main app hasn't set permission
+                console.log('🎯 Viewer requesting orientation permission - notifying main app');
+                
+                // Notify main app that we would like permission
+                this.sendMessage('orientationrequested', {
+                    reason: 'viewer-needs-permission',
+                    timestamp: performance.now()
+                });
+                
+                // Keep the fallback logic for non-iOS devices
                 if (typeof DeviceOrientationEvent !== 'undefined' && 
                     typeof DeviceOrientationEvent.requestPermission === 'function') {
                     
-                    try {
-                        const permission = await DeviceOrientationEvent.requestPermission();
-                        this.orientationPermission = permission;
-                        
-                        this.sendMessage('orientationpermission', {
-                            granted: permission === 'granted',
-                            permission: permission
-                        });
-                    } catch (error) {
-                        console.warn('🎯 Device orientation permission error:', error);
-                        this.orientationPermission = 'denied';
-                    }
+                    console.log('🎯 iOS device detected - waiting for main app permission');
+                    // Don't request directly - wait for main app
+                    this.orientationPermission = 'pending';
                 } else {
-                    // Assume granted for non-iOS devices
+                    // For non-iOS devices, assume granted
                     this.orientationPermission = 'granted';
+                    this.sendMessage('orientationpermission', {
+                        granted: true,
+                        permission: 'granted',
+                        source: 'auto-granted'
+                    });
                 }
             }
             
@@ -1071,5 +1137,4 @@
         });
     </script>
 </body>
-</html> 
 </html> 

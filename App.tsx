@@ -47,6 +47,58 @@ const TOUR_MODE_CONFIG = {
   }
 } as const;
 
+// Enhanced device orientation permission request function
+const requestDeviceOrientationPermission = async (): Promise<DeviceOrientationPermissionState> => {
+  console.log('🎯 Requesting device orientation permission...');
+  
+  // Check if device orientation is supported
+  const isSupported = 'DeviceOrientationEvent' in window;
+  
+  if (!isSupported) {
+    console.log('🎯 Device orientation not supported');
+    return {
+      granted: false,
+      requested: true,
+      supported: false,
+      error: 'Device orientation not supported'
+    };
+  }
+
+  // For iOS 13+ devices, request permission
+  if (typeof DeviceOrientationEvent !== 'undefined' && 
+      typeof (DeviceOrientationEvent as any).requestPermission === 'function') {
+    try {
+      console.log('🎯 Requesting iOS device orientation permission...');
+      const permission = await (DeviceOrientationEvent as any).requestPermission();
+      
+      console.log('🎯 iOS permission result:', permission);
+      
+      return {
+        granted: permission === 'granted',
+        requested: true,
+        supported: true,
+        error: permission === 'denied' ? 'Permission denied by user' : undefined
+      };
+    } catch (error) {
+      console.error('🎯 Error requesting device orientation permission:', error);
+      return {
+        granted: false,
+        requested: true,
+        supported: true,
+        error: error instanceof Error ? error.message : 'Permission request failed'
+      };
+    }
+  }
+
+  // For other devices, assume permission is granted
+  console.log('🎯 Non-iOS device - assuming permission granted');
+  return {
+    granted: true,
+    requested: true,
+    supported: true
+  };
+};
+
 export default function App() {
   const [showLandingPage, setShowLandingPage] = useState(true);
   const [isTeaserMode, setIsTeaserMode] = useState(false);
@@ -137,24 +189,21 @@ export default function App() {
     }
   };
 
-
-
-  // Enhanced handleGetStarted with mode-specific initialization
+  // Enhanced handleGetStarted with proper permission flow
   const handleGetStarted = useCallback(
-    (isTeaserRequest: boolean = false) => {
+    async (isTeaserRequest: boolean = false) => {
       const modeConfig = isTeaserRequest ? TOUR_MODE_CONFIG.TEASER : TOUR_MODE_CONFIG.FULL;
       console.log(`🚀 Starting ${modeConfig.displayName}:`, modeConfig.description);
       
       setIsTeaserMode(isTeaserRequest);
       setShowLandingPage(false);
       
-      // Set default permission state - A-Frame will handle the actual permission request
-      const defaultPermission: DeviceOrientationPermissionState = {
-        granted: false,
-        requested: false,
-        supported: true, // Assume supported, A-Frame will handle detection
-      };
-      setDeviceOrientationPermission(defaultPermission);
+      // Request device orientation permission immediately
+      console.log('🎯 Requesting device orientation permission for XR experience...');
+      const permissionResult = await requestDeviceOrientationPermission();
+      
+      console.log('🎯 Permission result:', permissionResult);
+      setDeviceOrientationPermission(permissionResult);
       
       // Log mode-specific features and limitations
       console.log(`📋 ${modeConfig.displayName} Features:`, modeConfig.features);
