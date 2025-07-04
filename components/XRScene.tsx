@@ -246,6 +246,14 @@ export function XRScene({
 
       const message: ViewerMessage = event.data;
 
+      // Reset connection state on any successful message
+      setConnectionHealth(prev => ({
+        ...prev,
+        connected: true,
+        lastHeartbeat: performance.now(),
+        timeSinceLastHeartbeat: 0
+      }));
+
       switch (message.type) {
         case 'ready':
           setIsViewerReady(true);
@@ -281,17 +289,23 @@ export function XRScene({
           console.error('🎯 Viewer error received:', errorMessage);
           setViewerError(errorMessage);
           
-          // Attempt recovery after a delay
-          setTimeout(() => {
-            console.log('🎯 Attempting viewer recovery...');
-            setViewerError(null);
-            
-            // Try to reinitialize the viewer
-            if (videoSrc) {
-              console.log('🎯 Reinitializing viewer with video source:', videoSrc);
-              sendToViewer('setVideoSource', { videoUrl: videoSrc });
-            }
-          }, 3000);
+          // Enhanced error recovery
+          if (message.recoverable !== false) { // Only attempt recovery if not explicitly marked as unrecoverable
+            setTimeout(() => {
+              console.log('🎯 Attempting viewer recovery...');
+              setViewerError(null);
+              
+              // Try to reinitialize the viewer
+              if (videoSrc) {
+                console.log('🎯 Reinitializing viewer with video source:', videoSrc);
+                sendToViewer('setVideoSource', { 
+                  videoUrl: videoSrc,
+                  currentTime: currentTime, // Sync current time
+                  isPlaying: isPlaying // Sync play state
+                });
+              }
+            }, 3000);
+          }
           break;
 
         case 'seek':
@@ -559,51 +573,49 @@ export function XRScene({
     }
   }, [containerWidth, containerHeight, sendToViewer, isViewerReady]);
 
-  // Enhanced connection health monitoring with automatic recovery
+  // Add new connection monitoring interval
   useEffect(() => {
-    const checkConnection = setInterval(() => {
+    const CONNECTION_TIMEOUT = 10000; // 10 seconds
+    const RECONNECT_INTERVAL = 5000; // 5 seconds
+    let reconnectAttempts = 0;
+    const MAX_RECONNECT_ATTEMPTS = 3;
+
+    const checkConnection = () => {
       const now = performance.now();
       const timeSinceLastHeartbeat = now - connectionHealth.lastHeartbeat;
-      
-      if (timeSinceLastHeartbeat > 10000) { // 10 seconds without heartbeat
-        console.warn('🎯 Connection health check failed - no heartbeat for', Math.round(timeSinceLastHeartbeat / 1000), 'seconds');
-        setConnectionHealth({ connected: false, lastHeartbeat: 0, timeSinceLastHeartbeat: timeSinceLastHeartbeat });
-        
-        // Attempt to recover connection
-        if (iframeRef.current?.contentWindow) {
-          console.log('🎯 Attempting to restore connection...');
-          try {
-            // Try to ping the iframe to restore connection
-            iframeRef.current.contentWindow.postMessage({
-              channel: 'viewer-360-headless',
-              type: 'ping',
-              timestamp: now,
-              recovery: true
-            }, '*');
-            
-            // If no response in 5 seconds, consider it failed
-            setTimeout(() => {
-              if (!connectionHealth.connected) {
-                console.error('🎯 Connection recovery failed - viewer may be unresponsive');
-                setViewerError('Connection lost with 360° viewer');
-              }
-            }, 5000);
-            
-          } catch (error) {
-            console.error('🎯 Error during connection recovery:', error);
-            setViewerError('Failed to restore connection with 360° viewer');
-          }
-        }
-      } else if (timeSinceLastHeartbeat > 15000 && !connectionHealth.connected) {
-        // If we've been disconnected for more than 15 seconds, force reconnect
-        console.log('🎯 Forcing connection reset after prolonged disconnection');
-        setConnectionHealth({ connected: true, lastHeartbeat: now, timeSinceLastHeartbeat: 0 });
-        setViewerError(null);
-      }
-    }, 5000);
 
-    return () => clearInterval(checkConnection);
-  }, [connectionHealth.lastHeartbeat, connectionHealth.connected]);
+      if (isViewerReady && timeSinceLastHeartbeat > CONNECTION_TIMEOUT) {
+        console.warn('🎯 Connection timeout detected:', { timeSinceLastHeartbeat });
+        setConnectionHealth(prev => ({ ...prev, connected: false }));
+        setViewerError('Connection lost with 360° viewer');
+
+        // Attempt reconnection if under max attempts
+        if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+          reconnectAttempts++;
+          console.log(`🎯 Attempting reconnection (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})...`);
+          
+          // Reset iframe src to force reconnection
+          if (iframeRef.current) {
+            const currentSrc = iframeRef.current.src;
+            iframeRef.current.src = '';
+            setTimeout(() => {
+              if (iframeRef.current) {
+                iframeRef.current.src = currentSrc;
+              }
+            }, 100);
+          }
+        } else {
+          console.error('🎯 Max reconnection attempts reached');
+        }
+      }
+    };
+
+    const connectionMonitor = setInterval(checkConnection, RECONNECT_INTERVAL);
+    
+    return () => {
+      clearInterval(connectionMonitor);
+    };
+  }, [isViewerReady, connectionHealth.lastHeartbeat]);
 
   // Handle recenter command with enhanced reliability
   const recenterViewer = useCallback(() => {
