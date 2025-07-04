@@ -1819,20 +1819,20 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
                   }
                 }}
               >
-                {shouldShowImageSkeleton(track.thumbnails[fullscreenImageIndex]) && (
+                {track.thumbnails && track.thumbnails[fullscreenImageIndex] && shouldShowImageSkeleton(getImageUrl(track.thumbnails[fullscreenImageIndex])) && (
                   <Skeleton className="absolute inset-0 w-full max-w-sm h-96 mx-auto" />
                 )}
                 
-                <img
-                  src={track.thumbnails[fullscreenImageIndex]}
-                  alt={`${track.title} - Image ${fullscreenImageIndex + 1}`}
-                  className={`max-w-full max-h-full object-contain transition-all duration-200 ease-out ${
-                    fullscreenZoom > 1 ? `scale-[${fullscreenZoom}]` : 'scale-100'
-                  } ${shouldShowImageSkeleton(track.thumbnails[fullscreenImageIndex]) ? 'opacity-0' : 'opacity-100'}`}
-                  style={{
-                    transform: `scale(${fullscreenZoom})`
-                  }}
-                />
+                {track.thumbnails && track.thumbnails[fullscreenImageIndex] && (
+                  <img
+                    src={getImageUrl(track.thumbnails[fullscreenImageIndex])}
+                    alt={`${track.title} - Image ${fullscreenImageIndex + 1}`}
+                    className={`max-w-full max-h-full object-contain transition-all duration-200 ease-out ${shouldShowImageSkeleton(getImageUrl(track.thumbnails[fullscreenImageIndex])) ? 'opacity-0' : 'opacity-100'}`}
+                    style={{
+                      transform: `scale(${fullscreenZoom})`
+                    }}
+                  />
+                )}
                 
                 {/* Navigation Arrows */}
                 {track.thumbnails.length > 1 && (
