@@ -138,7 +138,7 @@
             embedded
             vr-mode-ui="enabled: false"
             device-orientation-permission-ui="enabled: true"
-            renderer="colorManagement: true; gammaOutput: true; sortObjects: true; physicallyCorrectLights: true"
+            renderer="colorManagement: false; gammaOutput: false; antialias: true"
             background="color: #000000">
             
             <a-assets>
@@ -155,8 +155,7 @@
                 id="videosphere"
                 src="#video-asset"
                 rotation="0 0 0"
-                material="colorCorrection: true; tone-mapping: linear"
-                mobile-color-fix>
+                mobile-video-fix>
             </a-videosphere>
             
             <a-camera
@@ -170,38 +169,41 @@
     </div>
 
     <script>
-        // Custom A-Frame component for mobile color correction
-        AFRAME.registerComponent('mobile-color-fix', {
+        // Simple mobile color correction component
+        AFRAME.registerComponent('mobile-video-fix', {
             init: function() {
-                console.log('🎯 Initializing mobile color fix');
+                console.log('🎯 Initializing mobile video fix');
                 
-                // Get the video element and material
                 const videoEl = document.querySelector('#video-asset');
-                const videosphere = document.querySelector('#videosphere');
+                const videosphere = this.el;
                 
                 if (videoEl && videosphere) {
                     // Wait for video to load
                     videoEl.addEventListener('loadeddata', () => {
-                        console.log('🎯 Applying mobile color correction');
+                        console.log('🎯 Applying mobile video fix');
                         
-                        // Get the Three.js material
+                        // Get the mesh and material
                         const mesh = videosphere.getObject3D('mesh');
                         if (mesh && mesh.material) {
-                            // Ensure proper color space
-                            if (videoEl.videoWidth > 0) {
-                                // Create a new texture with proper color space
+                            // Check if we're on a mobile device with color issues
+                            const isMobile = /Mobi|Android/i.test(navigator.userAgent);
+                            
+                            if (isMobile) {
+                                console.log('🎯 Mobile device detected - applying color fix');
+                                
+                                // Create a new video texture without color space conversion
                                 const texture = new THREE.VideoTexture(videoEl);
-                                texture.colorSpace = THREE.SRGBColorSpace;
-                                texture.format = THREE.RGBFormat;
                                 texture.minFilter = THREE.LinearFilter;
                                 texture.magFilter = THREE.LinearFilter;
+                                texture.format = THREE.RGBFormat;
+                                texture.generateMipmaps = false;
                                 texture.flipY = false;
                                 
-                                // Apply to material
+                                // Apply directly to material without color space conversion
                                 mesh.material.map = texture;
                                 mesh.material.needsUpdate = true;
                                 
-                                console.log('🎯 Mobile color correction applied');
+                                console.log('🎯 Mobile video fix applied');
                             }
                         }
                     });
@@ -780,34 +782,90 @@
                     return;
                 }
                 
-                // Set loading timeout
-                const loadingTimeout = setTimeout(() => {
-                    console.error('🎯 Video loading timeout');
-                    this.showError('Video loading timeout - please check your connection', { url });
-                }, 30000); // 30 seconds timeout
+                // Increase timeout and add retry logic
+                let loadingTimeout;
+                let retryCount = 0;
+                const maxRetries = 3;
+                const timeoutDuration = 60000; // Increase to 60 seconds
                 
-                // Clear timeout when video loads
-                const clearLoadingTimeout = () => {
-                    clearTimeout(loadingTimeout);
+                const attemptLoad = () => {
+                    retryCount++;
+                    console.log(`🎯 Loading attempt ${retryCount}/${maxRetries + 1} for:`, url);
+                    
+                    // Clear any existing timeout
+                    if (loadingTimeout) {
+                        clearTimeout(loadingTimeout);
+                    }
+                    
+                    // Set loading timeout
+                    loadingTimeout = setTimeout(() => {
+                        console.error('🎯 Video loading timeout, attempt:', retryCount);
+                        
+                        if (retryCount <= maxRetries) {
+                            console.log('🎯 Retrying video load...');
+                            // Reset video element before retry
+                            if (this.video) {
+                                this.video.pause();
+                                this.video.removeAttribute('src');
+                                this.video.load();
+                            }
+                            
+                            // Wait a bit before retry
+                            setTimeout(attemptLoad, 2000);
+                        } else {
+                            this.showError('Video loading failed after multiple attempts - please check your connection', { 
+                                url, 
+                                attempts: retryCount,
+                                timeout: timeoutDuration 
+                            });
+                        }
+                    }, timeoutDuration);
+                    
+                    // Clear timeout when video loads
+                    const clearLoadingTimeout = () => {
+                        if (loadingTimeout) {
+                            clearTimeout(loadingTimeout);
+                            loadingTimeout = null;
+                        }
+                    };
+                    
+                    try {
+                        if (url.includes('.m3u8')) {
+                            this.loadHLSVideo(url, clearLoadingTimeout);
+                        } else {
+                            this.loadDirectVideo(url, clearLoadingTimeout);
+                        }
+                    } catch (error) {
+                        clearLoadingTimeout();
+                        console.error('🎯 Error loading video:', error);
+                        
+                        if (retryCount <= maxRetries) {
+                            console.log('🎯 Retrying after error...');
+                            setTimeout(attemptLoad, 2000);
+                        } else {
+                            this.showError('Failed to load video after multiple attempts', { 
+                                url, 
+                                error: error.message, 
+                                attempts: retryCount 
+                            });
+                        }
+                    }
                 };
                 
-                try {
-                    if (url.includes('.m3u8')) {
-                        this.loadHLSVideo(url, clearLoadingTimeout);
-                    } else {
-                        this.loadDirectVideo(url, clearLoadingTimeout);
-                    }
-                } catch (error) {
-                    clearLoadingTimeout();
-                    console.error('🎯 Error loading video:', error);
-                    this.showError('Failed to load video', { url, error: error.message });
-                }
+                // Start the first attempt
+                attemptLoad();
             }
             
             loadHLSVideo(url, clearLoadingTimeout) {
                 console.log('🎯 Loading HLS video:', url);
+                
                 if (Hls.isSupported()) {
-                    this.hlsPlayer = new Hls();
+                    this.hlsPlayer = new Hls({
+                        enableWorker: false, // Disable worker for better mobile compatibility
+                        lowLatencyMode: false,
+                        backBufferLength: 90
+                    });
+                    
                     this.hlsPlayer.loadSource(url);
                     this.hlsPlayer.attachMedia(this.video);
                     
@@ -826,14 +884,38 @@
                     
                     this.hlsPlayer.on(Hls.Events.ERROR, (event, data) => {
                         console.error('🎯 HLS error:', data);
-                        clearLoadingTimeout();
-                        this.showError('HLS streaming error - video may not be available', { 
-                            url, 
-                            errorType: data.type, 
-                            errorDetails: data.details 
-                        });
+                        
+                        // Handle recoverable errors
+                        if (data.fatal) {
+                            clearLoadingTimeout();
+                            
+                            switch (data.type) {
+                                case Hls.ErrorTypes.NETWORK_ERROR:
+                                    console.log('🎯 Network error, attempting recovery...');
+                                    this.hlsPlayer.startLoad();
+                                    break;
+                                case Hls.ErrorTypes.MEDIA_ERROR:
+                                    console.log('🎯 Media error, attempting recovery...');
+                                    this.hlsPlayer.recoverMediaError();
+                                    break;
+                                default:
+                                    console.log('🎯 Fatal error, destroying HLS player');
+                                    this.hlsPlayer.destroy();
+                                    this.showError('HLS streaming error - video may not be available', { 
+                                        url, 
+                                        errorType: data.type, 
+                                        errorDetails: data.details,
+                                        fatal: data.fatal
+                                    });
+                                    break;
+                            }
+                        } else {
+                            console.warn('🎯 Non-fatal HLS error:', data);
+                        }
                     });
+                    
                 } else if (this.video.canPlayType('application/vnd.apple.mpegurl')) {
+                    console.log('🎯 Using native HLS support');
                     this.video.src = url;
                     
                     // Ensure videosphere is updated with new source
@@ -853,13 +935,31 @@
             loadDirectVideo(url, clearLoadingTimeout) {
                 console.log('🎯 Loading direct video:', url);
                 
-                // Add error handling for direct video loading
+                // Reset any previous error handlers
+                this.video.onerror = null;
+                this.video.onloadedmetadata = null;
+                this.video.oncanplaythrough = null;
+                this.video.onstalled = null;
+                this.video.onsuspend = null;
+                
+                // Add comprehensive error handling
                 this.video.onerror = (error) => {
                     console.error('🎯 Direct video loading error:', error);
                     clearLoadingTimeout();
-                    this.showError('Failed to load video file', { url, error: error.message });
+                    
+                    const errorCode = this.video.error ? this.video.error.code : 'unknown';
+                    const errorMessage = this.video.error ? this.video.error.message : 'Video load failed';
+                    
+                    this.showError('Failed to load video file', { 
+                        url, 
+                        errorCode, 
+                        errorMessage,
+                        networkState: this.video.networkState,
+                        readyState: this.video.readyState
+                    });
                 };
                 
+                // Handle successful metadata load
                 this.video.onloadedmetadata = () => {
                     console.log('🎯 Direct video metadata loaded');
                     clearLoadingTimeout();
@@ -873,8 +973,34 @@
                     this.hideLoading();
                 };
                 
+                // Handle network stalls
+                this.video.onstalled = () => {
+                    console.warn('🎯 Video loading stalled');
+                };
+                
+                // Handle network suspend
+                this.video.onsuspend = () => {
+                    console.warn('🎯 Video loading suspended');
+                };
+                
+                // Handle when enough data is available to play
+                this.video.oncanplaythrough = () => {
+                    console.log('🎯 Video can play through');
+                    this.hideLoading();
+                };
+                
+                // Set source and start loading
                 this.video.src = url;
                 this.video.load();
+                
+                // Add a backup timeout specific to metadata loading
+                setTimeout(() => {
+                    if (!this.isVideoReady && this.video.readyState < 1) {
+                        console.warn('🎯 Video metadata still not loaded after 10 seconds');
+                        // Try to force reload
+                        this.video.load();
+                    }
+                }, 10000);
             }
             
             startPerformanceMonitoring() {
