@@ -342,10 +342,9 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
   
   // Image gallery state
   const [currentThumbnailIndex, setCurrentThumbnailIndex] = useState(0);
-  const [isTransitioning, setIsTransitioning] = useState(false);
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragOffset, setDragOffset] = useState(0);
-  const [autoTransitionDirection, setAutoTransitionDirection] = useState<'next' | 'prev' | null>(null);
+  const [fullscreenImageIndex, setFullscreenImageIndex] = useState(0);
+  const [fullscreenZoom, setFullscreenZoom] = useState(1);
+  const [showFullscreenInfo, setShowFullscreenInfo] = useState(false);
   
   // Refs
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -357,23 +356,20 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
   const lastTapTimeRef = useRef<number>(0);
   
   // Measurements
-  // @ts-ignore - Unused but kept for future reference
-  const containerDimensions = useRef({ width: 0, height: 0 });
+  const [containerDimensions, setContainerDimensions] = useState({ width: 0, height: 0 });
   // @ts-ignore - Unused but kept for future reference
   const [isImageHovered, setIsImageHovered] = useState(false);
   
   // Preloading state
   const [preloadedImages, setPreloadedImages] = useState<Set<string>>(new Set());
   const [preloadedXRScenes, setPreloadedXRScenes] = useState<Set<string>>(new Set());
+  const [trackImagesPreloaded, setTrackImagesPreloaded] = useState<{[key: number]: boolean}>({});
+  const [imagesLoaded, setImagesLoaded] = useState<{[key: string]: boolean}>({});
   
   // Gesture handling state
   const [startX, setStartX] = useState<number | null>(null);
   const [startY, setStartY] = useState<number | null>(null);
-  // @ts-ignore - Unused but kept for future reference
-  const dragOffset = useRef(0);
   const isDraggingRef = useRef(false);
-  // @ts-ignore - Unused but kept for future reference
-  const autoTransitionDirection = useRef<'next' | 'prev' | null>(null);
 
   // XR Scene state - Always maintain scene for seamless toggling
   const [xrSceneReady, setXRSceneReady] = useState(false);
@@ -388,8 +384,6 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
   const [dragCurrentX, setDragCurrentX] = useState(0);
   const [dragOffset, setDragOffset] = useState(0);
   const [isTransitioning, setIsTransitioning] = useState(false);
-
-  // New state for automatic transition animation
   const [autoTransitionDirection, setAutoTransitionDirection] = useState<'next' | 'prev' | null>(null);
 
   // Audio sync message dispatch with enhanced protocol support

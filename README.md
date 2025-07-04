@@ -553,6 +553,110 @@ Update `tour_config.json` with your 360° video URLs:
 3. **User Analytics**: Engagement and interaction tracking
 4. **Video Analytics**: Streaming quality and buffer health
 
+## 🎯 **XR Mode Testing & Debugging Guide**
+
+### **Simplified XR Implementation (FIXED)**
+
+**ISSUE RESOLVED**: Device orientation permission dialog was blocked by z-index conflicts and complex permission handling.
+
+**SOLUTION**: Simplified implementation that lets A-Frame handle device orientation natively:
+- ✅ Lowered z-index layers to avoid blocking permission dialogs  
+- ✅ Enabled A-Frame's native `device-orientation-permission-ui`
+- ✅ Removed complex permission handling from App.tsx
+- ✅ Enhanced videosphere texture refresh with multiple fallback mechanisms
+
+### **Testing the Simplified XR Implementation**
+
+The XR mode now uses A-Frame's native device orientation handling for better mobile compatibility.
+
+#### **Quick Test Steps:**
+1. **Start the app**: `npm run dev -- --host`
+2. **Open in browser**: `http://localhost:3001/`
+3. **Click "Try Free Preview"** - No permission requests on landing page
+4. **Enter XR Mode**: Click the VR glasses icon
+5. **Watch for permission dialog**: A-Frame will request device orientation (iOS only)
+6. **Test playback**: Play/pause audio and verify video texture updates
+7. **Test seeking**: Drag the audio scrubber and check video sync
+8. **Test mobile**: Access from phone/tablet - permission dialog should appear naturally
+
+#### **Debug Console Commands:**
+Open browser console and use these commands to monitor XR performance:
+
+```javascript
+// Check XR scene status
+window.xrDebug?.isReady
+
+// Request sync performance report
+window.xrDebug?.requestSyncReport()
+
+// Reset sync state if issues occur
+window.xrDebug?.resetSync()
+
+// Cleanup and reinitialize viewer
+window.xrDebug?.cleanupViewer()
+
+// Recenter the XR view
+window.recenterXRViewer?.()
+```
+
+#### **Console Output to Monitor:**
+- `🎯 XR Scene ready` - Scene initialization complete
+- `🎯 Video started for visual sync` - Video playback started
+- `🎯 Performing sync correction` - Time synchronization active
+- `🎯 Videosphere texture refresh complete` - Texture updates working
+- `🎯 Mobile: Video playback enabled` - Mobile autoplay success
+
+#### **Common Issues & Solutions:**
+
+**Problem**: Video texture frozen on first frame
+**Solution**: Check console for texture refresh messages, try `window.xrDebug?.resetSync()`
+
+**Problem**: Mobile video won't play
+**Solution**: Tap anywhere on the screen to enable autoplay, check for user interaction events
+
+**Problem**: Audio/video sync drift
+**Solution**: The system auto-corrects, but you can manually reset with `window.xrDebug?.resetSync()`
+
+**Problem**: XR mode not loading
+**Solution**: Check console for errors, verify video URL is accessible, try `window.xrDebug?.cleanupViewer()`
+
+#### **Mobile Testing Notes:**
+- iOS Safari requires user interaction before video autoplay
+- Android Chrome may need permission for device orientation
+- Touch/tap anywhere on screen to enable video playback
+- Check for "Mobile: Video playback enabled" in console
+
+#### **Performance Monitoring:**
+The system tracks:
+- Sync corrections per minute
+- Frame drop detection
+- Drift prediction and correction
+- Mobile-specific playback events
+
+All performance data is logged to console with 🎯 prefix for easy filtering.
+
+#### **Simplified Test Script:**
+For easy testing, copy and paste the contents of `test-simplified-xr.js` into your browser console:
+
+```javascript
+// Automatically tests the simplified XR implementation
+testSimplifiedXR.runTests()
+
+// Check permission dialog handling
+testSimplifiedXR.checkPermissionDialog()
+
+// Enter XR mode programmatically
+testSimplifiedXR.enterXRMode()
+
+// Check video/audio synchronization
+testSimplifiedXR.checkVideoSync()
+```
+
+#### **What's Different:**
+- **Before**: Complex permission handling blocked iOS dialogs
+- **After**: A-Frame handles permissions natively when entering XR mode
+- **Result**: Device orientation permission dialog appears correctly on mobile devices
+
 ---
 
 **Your mobile XR audio walking tour application now provides a truly immersive, production-ready experience that rivals professional VR applications while maintaining excellent mobile performance and user experience!** 🚀

@@ -21,12 +21,30 @@ interface DeviceOrientationPermissionState {
   error?: string;
 }
 
-// Z-Index Layer System for App - Consistent with AudioPlayer
+// Z-Index Layer System for App - Lower z-indexes to avoid blocking native permission dialogs
 const APP_Z_LAYERS = {
   BACKGROUND: 'z-0',
   MAIN_CONTENT: 'z-10', 
-  LANDING_OVERLAY: 'z-50',
+  LANDING_OVERLAY: 'z-20', // Lowered from z-50 to avoid blocking permission dialogs
   DECORATIVE_ELEMENTS: 'z-30'
+} as const;
+
+// Tour mode configuration
+const TOUR_MODE_CONFIG = {
+  TEASER: {
+    name: 'teaser',
+    displayName: 'Preview Mode',
+    description: 'Experience a sample of our historic walking tour',
+    limitations: ['Single location preview', 'Limited duration', 'No track selection'],
+    features: ['Full XR experience', 'Immersive audio', 'Reset camera view']
+  },
+  FULL: {
+    name: 'full',
+    displayName: 'Full Tour',
+    description: 'Complete historic district walking tour experience',
+    limitations: [],
+    features: ['Multiple locations', 'Full playlist', 'Audio-only mode', 'Track selection', 'Full XR controls']
+  }
 } as const;
 
 export default function App() {
@@ -40,57 +58,56 @@ export default function App() {
     requested: false,
     supported: false,
   });
-  const [isRequestingPermission, setIsRequestingPermission] =
-    useState(false);
-
-  // Handle audio sync messages from AudioPlayer
+  // Handle audio sync messages from AudioPlayer with mode-aware logging
   const handleAudioMessage = (message: AudioMessage) => {
-    console.log("🎵 Audio Sync Message:", message);
+    const modePrefix = isTeaserMode ? "🎬 [TEASER]" : "🎵 [FULL]";
+    console.log(`${modePrefix} Audio Sync Message:`, message);
 
-    // Enhanced message handling for 360° viewer integration
-    // Messages are now properly routed to the embedded 360° viewer iframe
+    // Enhanced message handling for 360° viewer integration with mode-specific behavior
     switch (message.type) {
       case "init":
         console.log(
-          "🎬 360° Viewer initialized with track:",
+          `${modePrefix} 360° Viewer initialized with track:`,
           message.data?.trackData?.title,
           "| Video URL:",
           message.data?.trackData?.xrSrc,
+          "| Mode:",
+          isTeaserMode ? "Preview" : "Full Tour"
         );
         break;
       case "playback-state":
         console.log(
-          `⏯️  360° Viewer: Playback ${message.data?.isPlaying ? "started" : "paused"} at ${message.data?.currentTime}s`,
+          `${modePrefix} Playback ${message.data?.isPlaying ? "started" : "paused"} at ${message.data?.currentTime}s`,
         );
         break;
       case "time-update":
         // These fire frequently, so we'll only log occasionally
         if (Math.floor(message.data?.currentTime) % 10 === 0) {
           console.log(
-            `⏱️  360° Viewer: Time sync ${message.data?.currentTime}s / ${message.data?.duration}s`,
+            `${modePrefix} Time sync ${message.data?.currentTime}s / ${message.data?.duration}s`,
           );
         }
         break;
       case "seek":
         console.log(
-          `⏩ 360° Viewer: Seek from ${message.data?.previousTime}s to ${message.data?.currentTime}s`,
+          `${modePrefix} Seek from ${message.data?.previousTime}s to ${message.data?.currentTime}s`,
         );
         break;
       case "track-change":
         console.log(
-          `🎵 360° Viewer: Track changed to "${message.data?.trackData?.title}" (Index: ${message.data?.trackIndex})`,
+          `${modePrefix} Track changed to "${message.data?.trackData?.title}" (Index: ${message.data?.trackIndex})`,
           "| Video URL:",
           message.data?.trackData?.xrSrc,
         );
         break;
       case "volume-change":
         console.log(
-          `🔊 360° Viewer: Volume changed: muted=${message.data?.isMuted}, level=${message.data?.volume}`,
+          `${modePrefix} Volume changed: muted=${message.data?.isMuted}, level=${message.data?.volume}`,
         );
         break;
       case "xr-mode-change":
         console.log(
-          `🥽 360° Viewer: XR Mode ${message.data?.isXRMode ? "ENABLED" : "DISABLED"} for track: "${message.data?.trackData?.title}"`,
+          `${modePrefix} XR Mode ${message.data?.isXRMode ? "ENABLED" : "DISABLED"} for track: "${message.data?.trackData?.title}"`,
           "| Video URL:",
           message.data?.trackData?.xrSrc,
           "| Device Orientation:",
@@ -98,224 +115,60 @@ export default function App() {
         );
         break;
       case "recenter":
-        console.log("🎯 360° Viewer: Camera recenter requested");
+        const recenterData = message.data as any;
+        const success = recenterData?.success;
+        if (success !== undefined) {
+          console.log(`${modePrefix} Camera recenter ${success ? "successful" : "failed"}`, 
+            success ? "" : `- ${recenterData?.error}`);
+        } else {
+          console.log(`${modePrefix} Camera recenter requested`);
+        }
         break;
       case "device-orientation-permission":
         console.log(
-          "📱 360° Viewer: Device orientation permission:",
+          `${modePrefix} Device orientation permission:`,
           message.data?.granted ? "GRANTED" : "DENIED",
           "| Supported:",
           message.data?.supported,
         );
         break;
       default:
-        console.log("📨 360° Viewer: Unknown message type:", (message as any).type, (message as any).data);
+        console.log(`${modePrefix} Unknown message type:`, (message as any).type, (message as any).data);
     }
   };
 
-  // Request device orientation permission
-  const requestDeviceOrientationPermission =
-    useCallback(async (): Promise<DeviceOrientationPermissionState> => {
-      const result: DeviceOrientationPermissionState = {
-        granted: false,
-        requested: true,
-        supported: false,
-      };
 
-      // Check if DeviceOrientationEvent is supported
-      if (typeof DeviceOrientationEvent === "undefined") {
-        result.error = "Device orientation not supported";
-        return result;
-      }
 
-      result.supported = true;
-
-      // For iOS 13+ devices, we need to request permission
-      if (
-        typeof (DeviceOrientationEvent as any)
-          .requestPermission === "function"
-      ) {
-        try {
-          console.log(
-            "🧭 Requesting iOS device orientation permission..."
-          );
-          const permission = await (
-            DeviceOrientationEvent as any
-          ).requestPermission();
-
-          if (permission === "granted") {
-            result.granted = true;
-            console.log(
-              "✅ iOS device orientation permission granted"
-            );
-          } else {
-            result.error = `iOS permission ${permission}`;
-            console.log(
-              "❌ iOS device orientation permission denied:",
-              permission
-            );
-          }
-        } catch (error) {
-          result.error = `iOS permission error: ${error}`;
-          console.error(
-            "❌ Error requesting iOS device orientation permission:",
-            error
-          );
-        }
-      } else {
-        // For Android and older iOS devices, permission is automatically granted
-        result.granted = true;
-        console.log(
-          "✅ Device orientation permission automatically granted (non-iOS 13+)"
-        );
-      }
-
-      return result;
-    }, []);
-
-  // Enhanced handleGetStarted to support both full tour and teaser mode
+  // Enhanced handleGetStarted with mode-specific initialization
   const handleGetStarted = useCallback(
-    async (isTeaserRequest: boolean = false) => {
-      setIsRequestingPermission(true);
+    (isTeaserRequest: boolean = false) => {
+      const modeConfig = isTeaserRequest ? TOUR_MODE_CONFIG.TEASER : TOUR_MODE_CONFIG.FULL;
+      console.log(`🚀 Starting ${modeConfig.displayName}:`, modeConfig.description);
+      
       setIsTeaserMode(isTeaserRequest);
-
-      try {
-        // Check if this is a mobile device (basic check)
-        const isMobile =
-          /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
-            navigator.userAgent,
-          );
-
-        if (isMobile) {
-          console.log(
-            `📱 Mobile device detected, requesting device orientation permission for ${isTeaserRequest ? "teaser" : "full tour"} mode...`
-          );
-          const permissionResult =
-            await requestDeviceOrientationPermission();
-          setDeviceOrientationPermission(permissionResult);
-
-          // Store permission in sessionStorage for the tour duration
-          sessionStorage.setItem(
-            "deviceOrientationPermission",
-            JSON.stringify(permissionResult)
-          );
-
-          // Log the result for debugging
-          if (permissionResult.granted) {
-            console.log(
-              `🎉 Device orientation permission granted and stored for ${isTeaserRequest ? "teaser" : "full tour"} session`
-            );
-          } else {
-            console.log(
-              `⚠️ Device orientation permission not granted for ${isTeaserRequest ? "teaser" : "full tour"}:`,
-              permissionResult.error
-            );
-          }
-        } else {
-          console.log(
-            `🖥️ Desktop device detected for ${isTeaserRequest ? "teaser" : "full tour"}, skipping device orientation permission`
-          );
-          const desktopResult: DeviceOrientationPermissionState =
-            {
-              granted: true, // Desktop doesn't need this permission
-              requested: true,
-              supported: false, // Not needed on desktop
-            };
-          setDeviceOrientationPermission(desktopResult);
-          sessionStorage.setItem(
-            "deviceOrientationPermission",
-            JSON.stringify(desktopResult)
-          );
-        }
-
-        // Small delay to show any permission UI
-        await new Promise((resolve) =>
-          setTimeout(resolve, 500),
-        );
-      } catch (error) {
-        console.error(
-          `❌ Error during ${isTeaserRequest ? "teaser" : "full tour"} initialization:`,
-          error
-        );
-        const errorResult: DeviceOrientationPermissionState = {
-          granted: false,
-          requested: true,
-          supported: false,
-          error: `Initialization error: ${error}`,
-        };
-        setDeviceOrientationPermission(errorResult);
-      } finally {
-        setIsRequestingPermission(false);
-        setShowLandingPage(false);
+      setShowLandingPage(false);
+      
+      // Set default permission state - A-Frame will handle the actual permission request
+      const defaultPermission: DeviceOrientationPermissionState = {
+        granted: false,
+        requested: false,
+        supported: true, // Assume supported, A-Frame will handle detection
+      };
+      setDeviceOrientationPermission(defaultPermission);
+      
+      // Log mode-specific features and limitations
+      console.log(`📋 ${modeConfig.displayName} Features:`, modeConfig.features);
+      if (modeConfig.limitations.length > 0) {
+        console.log(`⚠️ ${modeConfig.displayName} Limitations:`, modeConfig.limitations);
       }
     },
-    [requestDeviceOrientationPermission],
+    [],
   );
 
-  // Force orientation permission request if supported but not yet requested
-  const requestOrientationPermissionIfNeeded = useCallback(async () => {
-    try {
-      // Check if DeviceOrientationEvent.requestPermission is available (iOS 13+)
-      const isIOS13Plus = typeof (DeviceOrientationEvent as any).requestPermission === 'function';
-      
-      // Check if we already tried requesting permission
-      const permissionState = deviceOrientationPermission;
-      
-      // Request permission if:
-      // 1. We're on iOS 13+ (needs explicit permission)
-      // 2. We haven't already requested permission
-      if (isIOS13Plus && (!permissionState.requested || !permissionState.granted)) {
-        console.log("🧭 Force-requesting device orientation permission for iOS");
-        const newPermissionState = await requestDeviceOrientationPermission();
-        setDeviceOrientationPermission(newPermissionState);
-        
-        // Store the new state
-        sessionStorage.setItem(
-          "deviceOrientationPermission",
-          JSON.stringify(newPermissionState)
-        );
-        
-        return newPermissionState;
-      }
-      
-      return permissionState;
-    } catch (error) {
-      console.error("Error checking orientation permission:", error);
-      return deviceOrientationPermission;
-    }
-  }, [deviceOrientationPermission, requestDeviceOrientationPermission]);
-  
-  // Check for browser compatibility on component mount
-  // and request permission on iOS specifically
+  // Simplified initialization - no complex permission handling
   useEffect(() => {
-    // Detect if we're on iOS (where permission is needed)
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
-    
-    if (isIOS) {
-      // Try to request permission on initial load for iOS
-      requestOrientationPermissionIfNeeded();
-    }
-    
-    // Check for existing permission in storage
-    const storedPermission = sessionStorage.getItem(
-      "deviceOrientationPermission",
-    );
-    if (storedPermission) {
-      try {
-        const parsedPermission = JSON.parse(storedPermission);
-        setDeviceOrientationPermission(parsedPermission);
-        console.log(
-          "🔄 Restored device orientation permission from session:",
-          parsedPermission,
-        );
-      } catch (error) {
-        console.error(
-          "❌ Error parsing stored permission:",
-          error,
-        );
-      }
-    }
-  }, [requestOrientationPermissionIfNeeded]);
+    console.log("🎯 App initialized - XR permissions will be handled by A-Frame when needed");
+  }, []);
 
   return (
     <div className={`dark min-h-screen min-h-dvh bg-gradient-to-br from-slate-900 to-slate-800 ${APP_Z_LAYERS.BACKGROUND} overflow-hidden fixed inset-0`}>
@@ -422,43 +275,25 @@ export default function App() {
                   {/* Free Preview Button */}
                   <Button
                     onClick={() => handleGetStarted(true)}
-                    disabled={isRequestingPermission}
-                    className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 active:from-blue-800 active:to-purple-800 text-white h-12 rounded-xl transition-all duration-200 ease-out active:scale-95 hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 border-0"
+                    className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 active:from-blue-800 active:to-purple-800 text-white h-12 rounded-xl transition-all duration-200 ease-out active:scale-95 hover:scale-[1.02] border-0"
                   >
-                    {isRequestingPermission ? (
-                      <div className="flex items-center gap-2">
-                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                        Setting up preview...
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2">
-                        <Play className="h-4 w-4" />
-                        Try Free Preview
-                      </div>
-                    )}
+                    <div className="flex items-center gap-2">
+                      <Play className="h-4 w-4" />
+                      Try Free Preview
+                    </div>
                   </Button>
 
                   {/* Full Tour Button */}
                   <Button
                     onClick={() => handleGetStarted(false)}
-                    disabled={isRequestingPermission}
-                    className="w-full bg-white hover:bg-slate-100 active:bg-slate-200 text-slate-900 h-12 rounded-xl transition-all duration-200 ease-out active:scale-95 hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                    className="w-full bg-white hover:bg-slate-100 active:bg-slate-200 text-slate-900 h-12 rounded-xl transition-all duration-200 ease-out active:scale-95 hover:scale-[1.02]"
                   >
-                    {isRequestingPermission ? (
-                      <div className="flex items-center gap-2">
-                        <div className="w-4 h-4 border-2 border-slate-700 border-t-transparent rounded-full animate-spin"></div>
-                        Setting up full tour...
-                      </div>
-                    ) : (
-                      "Start Full Tour"
-                    )}
+                    Start Full Tour
                   </Button>
 
                   {/* Enhanced disclaimer */}
                   <p className="text-slate-500 text-xs text-center leading-relaxed">
-                    {isRequestingPermission
-                      ? "Requesting device permissions for the best XR experience..."
-                      : "Best experienced with headphones. XR features require device orientation access."}
+                    Best experienced with headphones. XR features will request device permissions when needed.
                   </p>
                 </div>
               </div>

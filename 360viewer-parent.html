@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>360° Video Application - Enhanced</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <style>
+    body {
+      margin: 0;
+      font-family: system-ui, sans-serif;
+      background: #000;
+      color: white;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+    
+    .controls {
+      background: #333;
+      padding: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+    
+    .viewer-container {
+      flex: 1;
+      position: relative;
+      background: #000;
+      min-height: 400px;
+    }
+    
+    iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+    
+    .timeline {
+      background: #222;
+      padding: 1rem;
+    }
+    
+    .timeline input {
+      width: 100%;
+      margin: 0.5rem 0;
+    }
+    
+    button {
+      background: #007AFF;
+      color: white;
+      border: none;
+      padding: 0.5rem 1rem;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    
+    button:hover {
+      background: #0056b3;
+    }
+    
+    button:disabled {
+      background: #666;
+      cursor: not-allowed;
+    }
+    
+    .status {
+      color: #00ff00;
+      font-weight: bold;
+    }
+    
+    .error {
+      color: #ff4444;
+    }
+    
+    .audio-controls {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    
+    .time-display {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 0.5rem;
+      font-size: 14px;
+    }
+    
+    .sync-indicator {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #00ff00;
+      margin-left: 0.5rem;
+    }
+    
+    .sync-indicator.warning {
+      background: #ff9900;
+    }
+    
+    .sync-indicator.error {
+      background: #ff4444;
+    }
+    
+    .performance-monitor {
+      font-size: 12px;
+      color: #888;
+      margin-left: auto;
+    }
+    
+    @media (max-width: 768px) {
+      .controls {
+        flex-direction: column;
+        gap: 0.5rem;
+      }
+      
+      .controls > div {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Control Interface -->
+  <div class="controls">
+    <div class="audio-controls">
+      <button id="playBtn">Play</button>
+      <button id="muteBtn">🔊</button>
+      <button id="recenterBtn">Recenter</button>
+      <label>FOV: <input type="range" id="fovSlider" min="75" max="120" value="90" step="1"></label>
+    </div>
+    
+    <div class="status-controls">
+      <span id="status">Loading...</span>
+      <span class="sync-indicator" id="syncIndicator"></span>
+      <button id="syncBtn">Force Sync</button>
+    </div>
+    
+    <div class="performance-monitor" id="performanceMonitor">
+      FPS: 0 | Drift: 0ms
+    </div>
+  </div>
+  
+  <!-- Audio Element for Audio-Video Sync -->
+  <audio id="masterAudio" controls style="background: #333; width: 100%; height: 40px;">
+    <source src="" type="audio/mpeg">
+    Your browser does not support the audio element.
+  </audio>
+  
+  <!-- 360° Viewer -->
+  <div class="viewer-container">
+    <iframe 
+      id="headless360"
+      src="360viewer-headless.html?autoStart=true"
+      allowfullscreen>
+    </iframe>
+  </div>
+  
+  <!-- Timeline -->
+  <div class="timeline">
+    <div class="time-display">
+      <span id="currentTime">0:00</span>
+      <span id="duration">0:00</span>
+    </div>
+    <input type="range" id="timelineSlider" min="0" max="100" value="0" step="0.1">
+  </div>
+
+  <script>
+    class Enhanced360Viewer {
+      constructor() {
+        this.iframe = document.getElementById('headless360');
+        this.audioElement = document.getElementById('masterAudio');
+        this.playBtn = document.getElementById('playBtn');
+        this.muteBtn = document.getElementById('muteBtn');
+        this.recenterBtn = document.getElementById('recenterBtn');
+        this.fovSlider = document.getElementById('fovSlider');
+        this.timelineSlider = document.getElementById('timelineSlider');
+        this.statusEl = document.getElementById('status');
+        this.currentTimeEl = document.getElementById('currentTime');
+        this.durationEl = document.getElementById('duration');
+        this.syncIndicator = document.getElementById('syncIndicator');
+        this.syncBtn = document.getElementById('syncBtn');
+        this.performanceMonitor = document.getElementById('performanceMonitor');
+        
+        // State variables
+        this.isPlaying = false;
+        this.isMuted = false;
+        this.currentTime = 0;
+        this.duration = 0;
+        this.isDragging = false;
+        this.videoCurrentTime = 0;
+        this.audioCurrentTime = 0;
+        this.lastSyncTime = 0;
+        this.syncThreshold = 1.0;
+        this.syncDebounce = 2000;
+        this.isSyncing = false;
+        this.connectionHealth = { connected: false, lastHeartbeat: 0 };
+        this.performanceStats = { fps: 0, drift: 0 };
+        this.isViewerReady = false;
+        
+        // Audio-video sync configuration
+        this.SYNC_THRESHOLD = 1.0; // seconds
+        this.SYNC_DEBOUNCE = 2000; // milliseconds
+        this.SYNC_TOLERANCE = 0.1; // seconds
+        
+        this.init();
+      }
+      
+      init() {
+        console.log('🎯 Initializing Enhanced 360° Viewer');
+        this.setupEventListeners();
+        this.setupMessageHandling();
+        this.setupAudioSync();
+        this.startConnectionMonitoring();
+        this.requestDeviceOrientationPermission();
+      }
+      
+      setupEventListeners() {
+        // Control buttons
+        this.playBtn.addEventListener('click', () => this.togglePlay());
+        this.muteBtn.addEventListener('click', () => this.toggleMute());
+        this.recenterBtn.addEventListener('click', () => this.recenterView());
+        this.syncBtn.addEventListener('click', () => this.forceSync());
+        
+        // FOV slider
+        this.fovSlider.addEventListener('input', (e) => {
+          const fov = parseFloat(e.target.value);
+          this.setFov(fov);
+        });
+        
+        // Timeline scrubbing
+        this.timelineSlider.addEventListener('pointerdown', () => {
+          this.isDragging = true;
+        });
+        
+        this.timelineSlider.addEventListener('pointerup', () => {
+          this.isDragging = false;
+        });
+        
+        this.timelineSlider.addEventListener('input', (e) => {
+          if (this.duration > 0) {
+            const seekTime = (parseFloat(e.target.value) / 100) * this.duration;
+            this.currentTime = seekTime;
+            this.currentTimeEl.textContent = this.formatTime(seekTime);
+            this.seek(seekTime);
+          }
+        });
+        
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+          this.handleKeydown(e);
+        });
+      }
+      
+      setupMessageHandling() {
+        // Listen for messages from the headless viewer
+        window.addEventListener('message', (event) => {
+          if (event.data.channel === 'viewer-360-headless') {
+            this.handleViewerMessage(event.data);
+          }
+        });
+      }
+      
+      setupAudioSync() {
+        // Audio controls the master timeline
+        this.audioElement.addEventListener('play', () => {
+          this.sendCommand('play');
+        });
+        
+        this.audioElement.addEventListener('pause', () => {
+          this.sendCommand('pause');
+        });
+        
+        this.audioElement.addEventListener('seeking', () => {
+          this.sendCommand('seek', {value: this.audioElement.currentTime});
+        });
+        
+        this.audioElement.addEventListener('timeupdate', () => {
+          this.audioCurrentTime = this.audioElement.currentTime;
+          this.performSync();
+        });
+        
+        this.audioElement.addEventListener('loadedmetadata', () => {
+          this.duration = this.audioElement.duration;
+          this.durationEl.textContent = this.formatTime(this.duration);
+        });
+      }
+      
+      handleViewerMessage(message) {
+        console.log('🎯 Received viewer message:', message.type, message);
+        
+        switch(message.type) {
+          case 'ready':
+            this.isViewerReady = true;
+            this.statusEl.textContent = 'Ready';
+            this.statusEl.className = 'status';
+            this.connectionHealth.connected = true;
+            this.connectionHealth.lastHeartbeat = performance.now();
+            this.updateSyncIndicator('good');
+            
+            // Initialize with demo content
+            this.initializeDemoContent();
+            break;
+            
+          case 'started':
+            this.statusEl.textContent = 'Playing';
+            this.playBtn.textContent = 'Pause';
+            this.isPlaying = true;
+            break;
+            
+          case 'play':
+            this.statusEl.textContent = 'Playing';
+            this.playBtn.textContent = 'Pause';
+            this.isPlaying = true;
+            break;
+            
+          case 'pause':
+            this.statusEl.textContent = 'Paused';
+            this.playBtn.textContent = 'Play';
+            this.isPlaying = false;
+            break;
+            
+          case 'timeupdate':
+            if (!this.isDragging) {
+              this.videoCurrentTime = message.currentTime;
+              this.currentTime = message.currentTime;
+              this.duration = message.duration || this.duration;
+              
+              this.currentTimeEl.textContent = this.formatTime(this.currentTime);
+              this.durationEl.textContent = this.formatTime(this.duration);
+              
+              if (this.duration > 0) {
+                this.timelineSlider.value = (this.currentTime / this.duration) * 100;
+              }
+              
+              this.performSync();
+            }
+            break;
+            
+          case 'mutechange':
+            this.isMuted = message.muted;
+            this.muteBtn.textContent = this.isMuted ? '🔇' : '🔊';
+            break;
+            
+          case 'fovchange':
+            this.fovSlider.value = message.fov;
+            break;
+            
+          case 'recenter':
+            this.statusEl.textContent = 'View Recentered';
+            setTimeout(() => {
+              this.statusEl.textContent = this.isPlaying ? 'Playing' : 'Paused';
+            }, 2000);
+            break;
+            
+          case 'preloaded':
+            this.statusEl.textContent = 'Preloaded & Ready';
+            break;
+            
+          case 'fpsupdate':
+            this.performanceStats.fps = message.fps || 0;
+            this.updatePerformanceDisplay();
+            break;
+            
+          case 'devicebenchmark':
+            console.log('📊 Device benchmark:', message.category);
+            break;
+            
+          case 'networkdetected':
+            console.log('🌐 Network quality:', message.quality);
+            break;
+            
+          case 'heartbeat-response':
+            this.connectionHealth.connected = true;
+            this.connectionHealth.lastHeartbeat = performance.now();
+            this.updateSyncIndicator('good');
+            break;
+            
+          case 'commandresponse':
+            console.log('✅ Command success:', message.command);
+            break;
+            
+          case 'commanderror':
+            console.error('❌ Command error:', message.command, message.error);
+            this.statusEl.textContent = 'Error: ' + message.error;
+            this.statusEl.className = 'error';
+            break;
+            
+          case 'error':
+            console.error('❌ Viewer error:', message.error);
+            this.statusEl.textContent = 'Error: ' + message.error;
+            this.statusEl.className = 'error';
+            break;
+        }
+      }
+      
+      sendCommand(type, data = {}) {
+        if (!this.isViewerReady) {
+          console.warn('🎯 Viewer not ready, queuing command:', type);
+          return;
+        }
+        
+        const command = {
+          channel: 'viewer-360-headless',
+          type: type,
+          timestamp: performance.now(),
+          ...data
+        };
+        
+        this.iframe.contentWindow.postMessage(command, '*');
+        console.log('🎯 Sent command:', type, data);
+      }
+      
+      togglePlay() {
+        if (this.isPlaying) {
+          this.audioElement.pause();
+          this.sendCommand('pause');
+        } else {
+          this.audioElement.play();
+          this.sendCommand('play');
+        }
+      }
+      
+      toggleMute() {
+        this.sendCommand('toggleMute');
+        this.audioElement.muted = !this.audioElement.muted;
+      }
+      
+      recenterView() {
+        this.sendCommand('recenter');
+      }
+      
+      setFov(fov) {
+        this.sendCommand('setFov', {value: fov});
+      }
+      
+      seek(time) {
+        this.sendCommand('seek', {value: time});
+        this.audioElement.currentTime = time;
+      }
+      
+      forceSync() {
+        if (this.audioElement.currentTime && this.videoCurrentTime) {
+          console.log('🔄 Force syncing video to audio time:', this.audioElement.currentTime);
+          this.sendCommand('syncSeek', {
+            time: this.audioElement.currentTime,
+            tolerance: this.SYNC_TOLERANCE
+          });
+          this.isSyncing = true;
+          this.lastSyncTime = performance.now();
+          
+          setTimeout(() => {
+            this.isSyncing = false;
+          }, 1000);
+        }
+      }
+      
+      performSync() {
+        if (this.audioElement.paused || this.isSyncing || !this.isViewerReady) return;
+        
+        const drift = this.audioCurrentTime - this.videoCurrentTime;
+        const absDrift = Math.abs(drift);
+        
+        this.performanceStats.drift = Math.round(absDrift * 1000); // Convert to ms
+        this.updatePerformanceDisplay();
+        
+        // Update sync indicator based on drift
+        if (absDrift > this.SYNC_THRESHOLD) {
+          this.updateSyncIndicator('error');
+        } else if (absDrift > this.SYNC_TOLERANCE) {
+          this.updateSyncIndicator('warning');
+        } else {
+          this.updateSyncIndicator('good');
+        }
+        
+        // Only sync if drift exceeds threshold
+        if (absDrift > this.SYNC_THRESHOLD && 
+            (performance.now() - this.lastSyncTime) > this.SYNC_DEBOUNCE) {
+          
+          console.log(`🔄 Auto-syncing video: ${drift.toFixed(2)}s drift`);
+          
+          this.isSyncing = true;
+          this.lastSyncTime = performance.now();
+          
+          this.sendCommand('syncSeek', {
+            time: this.audioCurrentTime,
+            tolerance: this.SYNC_TOLERANCE
+          });
+          
+          setTimeout(() => {
+            this.isSyncing = false;
+          }, 1000);
+        }
+      }
+      
+      updateSyncIndicator(state) {
+        this.syncIndicator.className = 'sync-indicator';
+        if (state === 'warning') {
+          this.syncIndicator.classList.add('warning');
+        } else if (state === 'error') {
+          this.syncIndicator.classList.add('error');
+        }
+      }
+      
+      updatePerformanceDisplay() {
+        this.performanceMonitor.textContent = 
+          `FPS: ${Math.round(this.performanceStats.fps)} | Drift: ${this.performanceStats.drift}ms`;
+      }
+      
+      startConnectionMonitoring() {
+        setInterval(() => {
+          this.sendCommand('heartbeat', {timestamp: performance.now()});
+          
+          // Check connection health
+          const timeSinceLastHeartbeat = performance.now() - this.connectionHealth.lastHeartbeat;
+          if (timeSinceLastHeartbeat > 10000) { // 10 seconds
+            this.connectionHealth.connected = false;
+            this.statusEl.textContent = 'Connection Lost';
+            this.statusEl.className = 'error';
+            this.updateSyncIndicator('error');
+          }
+        }, 5000);
+      }
+      
+      async requestDeviceOrientationPermission() {
+        if (typeof DeviceOrientationEvent !== 'undefined' && 
+            typeof DeviceOrientationEvent.requestPermission === 'function') {
+          
+          try {
+            const permission = await DeviceOrientationEvent.requestPermission();
+            console.log('📱 Device orientation permission:', permission);
+            
+            this.sendCommand('setOrientationPermission', {value: permission});
+          } catch (error) {
+            console.warn('📱 Could not request device orientation permission:', error);
+          }
+        } else {
+          // For non-iOS devices, assume granted
+          this.sendCommand('setOrientationPermission', {value: 'granted'});
+        }
+      }
+      
+      initializeDemoContent() {
+        // Initialize with demo 360° video and audio
+        const demoVideo = 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4';
+        const demoAudio = 'https://www.soundjay.com/misc/sounds/bell-ringing-05.wav';
+        
+        console.log('🎬 Loading demo content');
+        
+        // Set video source
+        this.sendCommand('setVideoSource', {videoUrl: demoVideo});
+        
+        // Set audio source
+        this.audioElement.src = demoAudio;
+        
+        // Auto-start if specified
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('autoStart') === 'true') {
+          setTimeout(() => {
+            this.togglePlay();
+          }, 2000);
+        }
+      }
+      
+      handleKeydown(e) {
+        switch(e.code) {
+          case 'Space':
+            e.preventDefault();
+            this.togglePlay();
+            break;
+          case 'KeyM':
+            this.toggleMute();
+            break;
+          case 'KeyR':
+            this.recenterView();
+            break;
+          case 'KeyS':
+            this.forceSync();
+            break;
+          case 'ArrowLeft':
+            e.preventDefault();
+            if (this.duration > 0) {
+              const newTime = Math.max(0, this.currentTime - 10);
+              this.seek(newTime);
+            }
+            break;
+          case 'ArrowRight':
+            e.preventDefault();
+            if (this.duration > 0) {
+              const newTime = Math.min(this.duration, this.currentTime + 10);
+              this.seek(newTime);
+            }
+            break;
+        }
+      }
+      
+      formatTime(seconds) {
+        const mins = Math.floor(seconds / 60);
+        const secs = Math.floor(seconds % 60);
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
+      }
+    }
+    
+    // Initialize the enhanced viewer when DOM is ready
+    document.addEventListener('DOMContentLoaded', () => {
+      new Enhanced360Viewer();
+    });
+  </script>
+</body>
+</html> 

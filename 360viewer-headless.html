@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>360° Headless Viewer</title>
+    <title>360° Headless Viewer - Enhanced</title>
     <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/hls.js@1.4.10/dist/hls.min.js"></script>
     <style>
@@ -43,7 +43,7 @@
             width: 100%;
             height: 100%;
             background: rgba(0, 0, 0, 0.9);
-            display: none; /* Start hidden since parent shows its own loading */
+            display: none;
             align-items: center;
             justify-content: center;
             z-index: 100;
@@ -137,7 +137,7 @@
             id="scene"
             embedded
             vr-mode-ui="enabled: false"
-            device-orientation-permission-ui="enabled: false">
+            device-orientation-permission-ui="enabled: true">
             
             <a-assets>
                 <video
@@ -157,7 +157,7 @@
             
             <a-camera
                 id="camera"
-                look-controls="enabled: true; pointerLockEnabled: false"
+                look-controls="enabled: true; pointerLockEnabled: false; magicWindowTrackingEnabled: true; reverseMouseDrag: true; reverseTouchDrag: true"
                 wasd-controls="enabled: false"
                 position="0 0 0"
                 fov="75">
@@ -166,7 +166,7 @@
     </div>
 
     <script>
-        class Viewer360 {
+        class HeadlessViewer360 {
             constructor() {
                 this.scene = null;
                 this.camera = null;
@@ -177,20 +177,52 @@
                 this.isSceneReady = false;
                 this.isVideoReady = false;
                 this.isPlaying = false;
+                this.isMuted = false;
                 this.currentTime = 0;
+                this.duration = 0;
                 this.videoUrl = '';
                 this.parentOrigin = '*';
                 this.lastHeartbeat = 0;
                 this.connectionHealth = true;
+                this.pendingPlaybackState = null;
+                this.initializationStartTime = performance.now();
+                this.autoStart = false;
+                this.orientationPermission = 'unknown';
+                this.devicePerformance = 'unknown';
+                this.networkQuality = 'unknown';
+                this.currentFov = 75;
+                this.preloadProgress = 0;
+                this.isBuffering = false;
+                this.lastTimeUpdate = 0;
+                this.syncTolerance = 0.1;
+                this.lastSyncTime = 0;
+                this.syncAttempts = 0;
+                this.maxSyncAttempts = 5;
+                this.isInSyncGracePeriod = false;
+                this.syncGracePeriodStart = 0;
+                this.gracePeriodDuration = 2000;
+                this.performanceMonitor = {
+                    fps: 0,
+                    frameCount: 0,
+                    lastFrameTime: 0,
+                    averageFps: 0,
+                    frameDrops: 0
+                };
+                this.lastPauseTime = 0;
+                this.lastPlayTime = 0;
+                this.pauseGracePeriod = 3000; // 3 second grace period after pause
                 
                 this.init();
             }
             
             init() {
+                console.log('🎯 Initializing headless 360° viewer');
+                
                 // Get URL parameters
                 const params = new URLSearchParams(window.location.search);
                 this.videoUrl = params.get('video') || '';
                 this.parentOrigin = params.get('origin') || '*';
+                this.autoStart = params.get('autoStart') === 'true';
                 
                 // Initialize A-Frame scene
                 this.scene = document.querySelector('#scene');
@@ -200,439 +232,844 @@
                 
                 this.setupEventListeners();
                 this.setupMessageHandling();
+                this.startPerformanceMonitoring();
+                this.detectDeviceCapabilities();
+                this.detectNetworkQuality();
+                
+                // Request device orientation permission if needed
+                this.requestDeviceOrientationPermission();
                 
                 // Auto-preload if specified
-                if (params.get('autoPreload') === 'true' && this.videoUrl) {
+                if (this.autoStart && this.videoUrl) {
                     this.loadVideo(this.videoUrl);
                 }
                 
-                // Don't automatically mark as ready - wait for both scene and video
+                // Send ready message after initialization
+                setTimeout(() => {
+                    this.sendMessage('ready', {
+                        mode: 'headless',
+                        autoStart: this.autoStart,
+                        orientationPermission: this.orientationPermission,
+                        devicePerformance: this.devicePerformance,
+                        networkQuality: this.networkQuality
+                    });
+                }, 100);
+                
+                // Expose debug method to parent window
+                if (window.parent && window.parent !== window) {
+                    window.parent.xrVideoDebug = () => this.getPlaybackDebugInfo();
+                }
             }
             
             setupEventListeners() {
-                // Video events
-                this.video.addEventListener('loadstart', () => {
-                    this.sendToParent('loading', { isLoading: true });
+                // A-Frame scene events
+                this.scene.addEventListener('loaded', () => {
+                    console.log('🎯 A-Frame scene loaded');
+                    this.isSceneReady = true;
+                    this.checkReadyState();
                 });
                 
+                // Video events
                 this.video.addEventListener('loadedmetadata', () => {
-                    this.sendToParent('loaded', { 
-                        duration: this.video.duration,
-                        videoUrl: this.videoUrl 
-                    });
+                    console.log('🎯 Video metadata loaded');
+                    this.duration = this.video.duration;
+                    this.isVideoReady = true;
+                    this.checkReadyState();
+                    
+                    // Apply any pending playback state
+                    if (this.pendingPlaybackState) {
+                        this.applyPlaybackState(this.pendingPlaybackState);
+                        this.pendingPlaybackState = null;
+                    }
                 });
                 
                 this.video.addEventListener('canplaythrough', () => {
-                    this.isVideoReady = true;
-                    this.hideLoading();
-                    // Only send ready message if both scene and video are ready
-                    this.checkAndSendReady();
-                });
-                
-                this.video.addEventListener('play', () => {
-                    this.isPlaying = true;
-                    this.sendToParent('play', { currentTime: this.video.currentTime });
-                });
-                
-                this.video.addEventListener('pause', () => {
-                    this.isPlaying = false;
-                    this.sendToParent('pause', { currentTime: this.video.currentTime });
+                    console.log('🎯 Video can play through');
+                    this.sendMessage('preloaded', {
+                        duration: this.duration,
+                        readyState: this.video.readyState
+                    });
                 });
                 
                 this.video.addEventListener('timeupdate', () => {
                     this.currentTime = this.video.currentTime;
-                    this.sendToParent('time-update', { 
+                    this.sendMessage('timeupdate', {
                         currentTime: this.currentTime,
-                        duration: this.video.duration 
+                        duration: this.duration
+                    });
+                });
+                
+                this.video.addEventListener('play', () => {
+                    this.isPlaying = true;
+                    console.log('🎯 Video play event fired');
+                    this.sendMessage('play');
+                });
+                
+                this.video.addEventListener('pause', () => {
+                    this.isPlaying = false;
+                    console.log('🎯 Video pause event fired');
+                    this.sendMessage('pause');
+                });
+                
+                this.video.addEventListener('volumechange', () => {
+                    this.isMuted = this.video.muted;
+                    this.sendMessage('mutechange', {
+                        muted: this.isMuted,
+                        volume: this.video.volume
                     });
                 });
                 
                 this.video.addEventListener('seeking', () => {
-                    this.sendToParent('seeking', { currentTime: this.video.currentTime });
+                    this.isBuffering = true;
+                    this.sendMessage('buffering', { isBuffering: true });
                 });
                 
                 this.video.addEventListener('seeked', () => {
-                    this.sendToParent('seeked', { currentTime: this.video.currentTime });
-                });
-                
-                this.video.addEventListener('waiting', () => {
-                    this.sendToParent('buffering', { isBuffering: true });
-                });
-                
-                this.video.addEventListener('playing', () => {
-                    this.sendToParent('buffering', { isBuffering: false });
+                    this.isBuffering = false;
+                    this.sendMessage('buffering', { isBuffering: false });
                 });
                 
                 this.video.addEventListener('error', (e) => {
-                    console.error('360° Viewer - Video error:', e);
-                    let errorMessage = 'Video playback error';
-                    if (this.video.error) {
-                        switch (this.video.error.code) {
-                            case MediaError.MEDIA_ERR_NETWORK:
-                                errorMessage = 'Network error - check your connection';
-                                break;
-                            case MediaError.MEDIA_ERR_DECODE:
-                                errorMessage = 'Video format not supported';
-                                break;
-                            case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED:
-                                errorMessage = 'Video source not found or not supported';
-                                break;
-                            default:
-                                errorMessage = 'Video playback error';
-                        }
-                    }
-                    this.showError(errorMessage);
-                    this.sendToParent('error', { error: errorMessage });
+                    console.error('🎯 Video error:', e);
+                    this.showError('Video playback error');
+                    this.sendMessage('error', {
+                        error: 'Video playback error',
+                        code: this.video.error?.code,
+                        message: this.video.error?.message
+                    });
                 });
                 
                 // Camera FOV changes
                 this.camera.addEventListener('componentchanged', (e) => {
                     if (e.detail.name === 'camera') {
-                        const fov = this.camera.getAttribute('camera').fov;
-                        this.sendToParent('fovchange', { fov });
+                        this.currentFov = this.camera.getAttribute('fov');
+                        this.sendMessage('fovchange', {
+                            fov: this.currentFov
+                        });
                     }
                 });
                 
-                // Scene ready - but don't send ready until video is also ready
-                this.scene.addEventListener('loaded', () => {
-                    this.isSceneReady = true;
-                    
-                    // If there's no video URL, we can mark the scene as ready
-                    if (!this.videoUrl) {
-                        this.markAsReady();
-                    } else {
-                        // Otherwise wait for both scene and video
-                        this.checkAndSendReady();
-                    }
+                // Window events
+                window.addEventListener('beforeunload', () => {
+                    this.cleanup();
                 });
-                
-                // Immediate fallback for no-video case (removed artificial delay)
-                if (!this.videoUrl) {
-                    console.log('360° Viewer - ⚠️ No video URL provided, marking scene-only as ready');
-                    this.isVideoReady = true; // Force video ready for no-video case
-                    this.checkAndSendReady();
-                }
             }
             
             setupMessageHandling() {
                 window.addEventListener('message', (event) => {
-                    // Skip messages that aren't for us
-                    if (!event.data || !event.data.channel || event.data.channel !== 'viewer-360') {
-                        return;
-                    }
+                    if (event.data.channel !== 'viewer-360-headless') return;
                     
-                    const data = event.data;
+                    console.log('🎯 Received command:', event.data.type, event.data);
                     
-                    switch(data.type) {
-                        case 'init':
-                            this.handleInit(data);
-                            break;
-                            
-                        case 'playback-state':
-                            this.handlePlaybackState(data);
-                            break;
-                            
-                        case 'time-update':
-                            this.handleTimeUpdate(data);
-                            break;
-                            
-                        case 'seek':
-                            if (data.currentTime !== undefined) {
-                                this.video.currentTime = data.currentTime;
-                                this.sendToParent('seek', { currentTime: data.currentTime });
-                            }
-                            break;
-                            
-                        case 'track-change':
-                            this.handleTrackChange(data);
-                            break;
-                            
-                        case 'recenter':
-                            this.recenterCamera();
-                            break;
-                            
-                        case 'resize':
-                            // Handle resize events if needed
-                            break;
-                            
-                        case 'heartbeat':
-                            this.sendToParent('heartbeat-response', { 
-                                timestamp: performance.now(),
-                                originalTimestamp: data.timestamp 
-                            });
-                            break;
-                            
-                        case 'set-inverse-controls':
-                            if (this.camera && this.camera.components['look-controls']) {
-                                const lookControls = this.camera.components['look-controls'];
-                                if (data.inverseX !== undefined) {
-                                    lookControls.data.reverseMouseDrag = data.inverseX;
-                                }
-                                if (data.inverseY !== undefined) {
-                                    lookControls.data.reverseTouchDrag = data.inverseY;
-                                }
-                            }
-                            break;
-                            
-                        default:
-                            break;
-                    }
+                    this.handleCommand(event.data.type, event.data);
                 });
             }
             
-            handleInit(data) {
-                if (!data.data) return;
-                
-                const { videoUrl, currentTime, isPlaying, deviceOrientationPermission } = data.data;
-                
-                if (videoUrl && videoUrl !== this.videoUrl) {
-                    this.loadVideo(videoUrl);
+            handleCommand(type, data) {
+                try {
+                    switch (type) {
+                        case 'start':
+                            this.start();
+                            break;
+                        case 'playback-state':
+                            this.handlePlaybackState(data);
+                            break;
+                        case 'time-update':
+                            this.handleTimeUpdate(data);
+                            break;
+                        case 'play':
+                            this.play();
+                            break;
+                        case 'pause':
+                            this.pause();
+                            break;
+                        case 'togglePlay':
+                            this.togglePlay();
+                            break;
+                        case 'seek':
+                            this.seek(data.value || data.time);
+                            break;
+                        case 'syncSeek':
+                            this.syncSeek(data.time, data.tolerance);
+                            break;
+                        case 'smoothSeek':
+                            this.smoothSeek(data.time, data.tolerance);
+                            break;
+                        case 'mute':
+                            this.setMute(data.value);
+                            break;
+                        case 'toggleMute':
+                            this.toggleMute();
+                            break;
+                        case 'setFov':
+                            this.setFov(data.value);
+                            break;
+                        case 'recenter':
+                            this.recenter();
+                            break;
+                        case 'preload':
+                            this.preload();
+                            break;
+                        case 'setVideoSource':
+                            this.setVideoSource(data.videoUrl);
+                            break;
+                        case 'switchChapter':
+                            this.switchChapter(data.chapterNumber, data.videoUrl);
+                            break;
+                        case 'setOrientationPermission':
+                            this.setOrientationPermission(data.value);
+                            break;
+                        case 'requestOrientationPermission':
+                            this.requestDeviceOrientationPermission();
+                            break;
+                        case 'getConnectionHealth':
+                            this.getConnectionHealth();
+                            break;
+                        case 'heartbeat':
+                            this.handleHeartbeat(data.timestamp);
+                            break;
+                        case 'ping':
+                            this.handlePing(data.timestamp);
+                            break;
+                        case 'getPlaybackDebugInfo':
+                            this.sendMessage('playbackdebuginfo', this.getPlaybackDebugInfo());
+                            break;
+                        default:
+                            console.warn('🎯 Unknown command:', type);
+                            this.sendMessage('commanderror', {
+                                command: type,
+                                error: 'Unknown command type'
+                            });
+                    }
+                    
+                    // Send success response
+                    this.sendMessage('commandresponse', {
+                        command: type,
+                        success: true
+                    });
+                    
+                } catch (error) {
+                    console.error('🎯 Command error:', type, error);
+                    this.sendMessage('commanderror', {
+                        command: type,
+                        error: error.message || 'Command execution failed'
+                    });
                 }
+            }
+            
+            sendMessage(type, data = {}) {
+                const message = {
+                    channel: 'viewer-360-headless',
+                    type: type,
+                    timestamp: performance.now(),
+                    ...data
+                };
                 
-                if (currentTime !== undefined) {
-                    this.video.currentTime = currentTime;
+                if (window.parent && window.parent !== window) {
+                    window.parent.postMessage(message, this.parentOrigin);
                 }
-                
-                if (isPlaying) {
-                    this.playVideo();
-                } else {
-                    this.pauseVideo();
-                }
-                
-                // Update device orientation permission state
-                if (deviceOrientationPermission) {
-                    this.updateDeviceOrientation(deviceOrientationPermission);
-                }
+            }
+            
+            start() {
+                console.log('🎯 Starting viewer');
+                this.sendMessage('started', {
+                    orientationPermission: this.orientationPermission,
+                    hasDeviceYaw: this.hasDeviceYaw(),
+                    mode: 'headless',
+                    devicePerformance: this.devicePerformance,
+                    networkQuality: this.networkQuality
+                });
             }
             
             handlePlaybackState(data) {
-                if (!data.data) return;
+                console.log('🎯 Handling playback state:', data);
                 
-                const { isPlaying, currentTime, deviceOrientationPermission } = data.data;
+                // Store the playback state for when video is ready
+                this.pendingPlaybackState = data;
                 
-                // If time is significantly different, sync it
-                if (currentTime !== undefined && Math.abs(this.video.currentTime - currentTime) > 0.5) {
-                    this.video.currentTime = currentTime;
-                }
-                
-                if (isPlaying && this.video.paused) {
-                    this.playVideo();
-                } else if (!isPlaying && !this.video.paused) {
-                    this.pauseVideo();
-                }
-                
-                // Update device orientation permission state
-                if (deviceOrientationPermission) {
-                    this.updateDeviceOrientation(deviceOrientationPermission);
+                // If video is ready, apply the state immediately
+                if (this.isVideoReady && this.video) {
+                    this.applyPlaybackState(data);
                 }
             }
             
-            handleTimeUpdate(data) {
-                if (!data.data || data.data.currentTime === undefined) return;
+            applyPlaybackState(data) {
+                if (!this.video || !this.isVideoReady) return;
                 
-                // Only sync time if it's significantly different from current time
-                const newTime = data.data.currentTime;
-                if (Math.abs(this.video.currentTime - newTime) > 0.5) {
-                    this.video.currentTime = newTime;
-                }
-            }
-            
-            handleTrackChange(data) {
-                if (!data.data) return;
+                console.log('🎯 Applying playback state:', data);
                 
-                const { videoUrl, currentTime = 0 } = data.data;
+                const now = performance.now();
                 
-                if (videoUrl && videoUrl !== this.videoUrl) {
-                    this.loadVideo(videoUrl);
-                    
-                    // Set the time to the beginning or specified time
-                    if (currentTime !== undefined) {
-                        this.video.currentTime = currentTime;
+                // Sync the current time if provided
+                if (typeof data.currentTime === 'number' && data.currentTime >= 0) {
+                    const timeDiff = Math.abs(this.video.currentTime - data.currentTime);
+                    if (timeDiff > 0.5) { // Only sync if difference is significant
+                        this.video.currentTime = data.currentTime;
                     }
                 }
-            }
-            
-            loadVideo(videoUrl) {
-                if (!videoUrl) {
-                    this.showError('No video URL provided');
-                    return;
-                }
                 
-                this.videoUrl = videoUrl;
-                this.showLoading();
-                
-                // Reset video state
-                this.isVideoReady = false;
-                
-                // Clear video src
-                if (this.hlsPlayer) {
-                    this.hlsPlayer.destroy();
-                    this.hlsPlayer = null;
-                }
-                
-                this.video.pause();
-                this.video.removeAttribute('src');
-                this.video.load();
-                
-                // Check if it's an HLS stream (.m3u8)
-                if (videoUrl.includes('.m3u8')) {
-                    // Use HLS.js if supported
-                    if (Hls.isSupported()) {
-                        const hls = new Hls({
-                            maxBufferLength: 60,
-                            maxMaxBufferLength: 60,
-                            capLevelToPlayerSize: true,
-                            startLevel: -1, // Auto quality
-                            testBandwidth: true
-                        });
-                        
-                        hls.loadSource(videoUrl);
-                        hls.attachMedia(this.video);
-                        
-                        hls.on(Hls.Events.MANIFEST_PARSED, () => {
-                            this.sendToParent('hls-manifest-parsed', {
-                                levels: hls.levels.length
-                            });
-                        });
-                        
-                        hls.on(Hls.Events.ERROR, (event, data) => {
-                            if (data.fatal) {
-                                switch(data.type) {
-                                    case Hls.ErrorTypes.NETWORK_ERROR:
-                                        hls.startLoad();
-                                        break;
-                                    case Hls.ErrorTypes.MEDIA_ERROR:
-                                        hls.recoverMediaError();
-                                        break;
-                                    default:
-                                        this.showError('HLS playback error: ' + data.details);
-                                        break;
-                                }
-                            }
-                        });
-                        
-                        this.hlsPlayer = hls;
-                    }
-                    // Use native HLS support in Safari/iOS
-                    else if (this.video.canPlayType('application/vnd.apple.mpegurl')) {
-                        this.video.src = videoUrl;
-                    } else {
-                        this.showError('HLS not supported on this browser');
+                // Apply play/pause state with grace period protection
+                if (data.isPlaying && this.video.paused) {
+                    // Check if we recently paused - if so, don't auto-play
+                    const timeSinceLastPause = now - this.lastPauseTime;
+                    if (timeSinceLastPause < this.pauseGracePeriod) {
+                        console.log('🎯 Ignoring auto-play request - recent pause detected', { timeSinceLastPause });
                         return;
                     }
-                } else {
-                    // Regular video
-                    this.video.src = videoUrl;
-                }
-            }
-            
-            recenterCamera() {
-                if (!this.camera) return;
-                
-                // Reset camera rotation
-                this.camera.setAttribute('rotation', '0 0 0');
-                
-                // If using look-controls, also reset those
-                if (this.camera.components['look-controls']) {
-                    const lookControls = this.camera.components['look-controls'];
-                    if (lookControls.pitchObject) lookControls.pitchObject.rotation.x = 0;
-                    if (lookControls.yawObject) lookControls.yawObject.rotation.y = 0;
-                }
-            }
-            
-            checkAndSendReady() {
-                if (this.isSceneReady && (this.isVideoReady || !this.videoUrl)) {
-                    this.sendToParent('ready', {
-                        isReady: true,
-                        videoUrl: this.videoUrl
+                    
+                    console.log('🎯 Auto-starting video playback');
+                    this.lastPlayTime = now;
+                    this.video.play().catch(e => {
+                        console.warn('🎯 Auto-play failed:', e);
+                        // This is expected in some browsers without user interaction
                     });
-                }
-            }
-            
-            showLoading() {
-                document.getElementById('loading-overlay').classList.add('show');
-                document.getElementById('loading-overlay').classList.remove('hidden');
-            }
-            
-            hideLoading() {
-                document.getElementById('loading-overlay').classList.remove('show');
-                document.getElementById('loading-overlay').classList.add('hidden');
-            }
-            
-            showError(message) {
-                const errorOverlay = document.getElementById('error-overlay');
-                const errorMessage = document.getElementById('error-message');
-                
-                errorMessage.textContent = message || 'Error loading 360° video.';
-                errorOverlay.style.display = 'flex';
-                
-                this.sendToParent('error', { error: message });
-            }
-            
-            hideError() {
-                document.getElementById('error-overlay').style.display = 'none';
-            }
-            
-            playVideo() {
-                if (this.video.paused) {
-                    this.video.play().catch(error => {
-                        this.showError('Cannot play video: ' + error.message);
-                    });
-                }
-            }
-            
-            pauseVideo() {
-                if (!this.video.paused) {
+                } else if (!data.isPlaying && !this.video.paused) {
+                    console.log('🎯 Auto-pausing video playback');
+                    this.lastPauseTime = now;
                     this.video.pause();
                 }
             }
             
-            sendToParent(type, data = {}) {
-                window.parent.postMessage({
-                    channel: 'viewer-360',
-                    type: type,
-                    timestamp: performance.now(),
-                    ...data
-                }, '*');
+            handleTimeUpdate(data) {
+                if (!this.video || !this.isVideoReady) return;
+                
+                // Only sync time if video is playing - avoid interfering with pause state
+                if (!this.video.paused && typeof data.currentTime === 'number' && data.currentTime >= 0) {
+                    const timeDiff = Math.abs(this.video.currentTime - data.currentTime);
+                    if (timeDiff > 0.2) { // Sync if drift is significant
+                        console.log('🎯 Syncing video time:', { 
+                            videoTime: this.video.currentTime, 
+                            parentTime: data.currentTime,
+                            drift: timeDiff
+                        });
+                        this.video.currentTime = data.currentTime;
+                    }
+                }
             }
             
-            updateDeviceOrientation(permissionState) {
-                if (!this.camera || !this.camera.components['look-controls']) return;
-                
-                const lookControls = this.camera.components['look-controls'];
-                
-                // Enable/disable device orientation based on permission state
-                if (permissionState.granted) {
-                    lookControls.data.magicWindowEnabled = true;
-                    lookControls.data.magicWindowTrackingEnabled = true;
+            play() {
+                if (this.video && this.isVideoReady) {
+                    this.lastPlayTime = performance.now();
+                    this.video.play().catch(e => {
+                        console.error('🎯 Play failed:', e);
+                        this.sendMessage('error', { error: 'Play failed: ' + e.message });
+                    });
+                }
+            }
+            
+            pause() {
+                if (this.video && this.isVideoReady) {
+                    this.lastPauseTime = performance.now();
+                    this.video.pause();
+                }
+            }
+            
+            togglePlay() {
+                if (this.isPlaying) {
+                    this.pause();
                 } else {
-                    lookControls.data.magicWindowEnabled = false;
-                    lookControls.data.magicWindowTrackingEnabled = false;
+                    this.play();
+                }
+            }
+            
+            seek(time) {
+                if (this.video && this.isVideoReady && time >= 0 && time <= this.duration) {
+                    this.video.currentTime = time;
+                    this.currentTime = time;
+                }
+            }
+            
+            syncSeek(time, tolerance = 0.1) {
+                if (!this.video || !this.isVideoReady) return;
+                
+                const currentTime = this.video.currentTime;
+                const drift = Math.abs(time - currentTime);
+                
+                if (drift > tolerance) {
+                    console.log('🎯 Sync seek:', { from: currentTime, to: time, drift });
+                    this.startSyncGracePeriod();
+                    this.video.currentTime = time;
+                }
+            }
+            
+            smoothSeek(time, tolerance = 0.1) {
+                if (!this.video || !this.isVideoReady) return;
+                
+                const currentTime = this.video.currentTime;
+                const drift = time - currentTime;
+                
+                if (Math.abs(drift) > tolerance) {
+                    const maxStep = 0.2;
+                    const step = Math.sign(drift) * Math.min(Math.abs(drift), maxStep);
+                    this.video.currentTime = currentTime + step;
+                    
+                    // Continue smooth seeking if needed
+                    if (Math.abs(drift) > maxStep) {
+                        setTimeout(() => {
+                            this.smoothSeek(time, tolerance);
+                        }, 50);
+                    }
+                }
+            }
+            
+            setMute(muted) {
+                if (this.video) {
+                    this.video.muted = muted;
+                }
+            }
+            
+            toggleMute() {
+                if (this.video) {
+                    this.video.muted = !this.video.muted;
+                }
+            }
+            
+            setFov(fov) {
+                if (this.camera && fov >= 75 && fov <= 120) {
+                    this.camera.setAttribute('fov', fov);
+                    this.currentFov = fov;
+                }
+            }
+            
+            recenter() {
+                console.log('🎯 Recenter called - resetting camera rotation');
+                
+                if (this.camera) {
+                    // Reset camera rotation
+                    this.camera.setAttribute('rotation', '0 0 0');
+                    
+                    // Also reset any accumulated rotation from look controls
+                    const lookControls = this.camera.components['look-controls'];
+                    if (lookControls) {
+                        lookControls.pitchObject.rotation.x = 0;
+                        lookControls.yawObject.rotation.y = 0;
+                        console.log('🎯 Reset look controls rotation');
+                    }
+                    
+                    // Send success message back to parent
+                    this.sendMessage('recenter', { 
+                        success: true, 
+                        timestamp: performance.now(),
+                        rotation: { x: 0, y: 0, z: 0 }
+                    });
+                    
+                    console.log('🎯 Camera recentered successfully');
+                } else {
+                    console.error('🎯 Cannot recenter - camera not found');
+                    this.sendMessage('recenter', { 
+                        success: false, 
+                        error: 'Camera not found',
+                        timestamp: performance.now()
+                    });
+                }
+            }
+            
+            preload() {
+                if (this.video && this.videoUrl) {
+                    this.video.load();
+                }
+            }
+            
+            setVideoSource(videoUrl) {
+                console.log('🎯 setVideoSource called with:', videoUrl);
+                
+                // Clean up any existing HLS player
+                if (this.hlsPlayer) {
+                    console.log('🎯 Cleaning up existing HLS player');
+                    this.hlsPlayer.destroy();
+                    this.hlsPlayer = null;
                 }
                 
-                // Force update of look-controls component
-                if (lookControls.updateMagicWindowOrientation) {
-                    lookControls.updateMagicWindowOrientation();
+                // Reset video element
+                if (this.video) {
+                    this.video.pause();
+                    this.video.removeAttribute('src');
+                    this.video.load();
                 }
+                
+                this.videoUrl = videoUrl;
+                this.isVideoReady = false;
+                
+                // Clear any pending playback state since we're loading a new video
+                this.pendingPlaybackState = null;
+                
+                if (videoUrl) {
+                    this.loadVideo(videoUrl);
+                } else {
+                    console.warn('🎯 No video URL provided to setVideoSource');
+                }
+            }
+            
+            switchChapter(chapterNumber, videoUrl) {
+                console.log('🎯 Switching to chapter:', chapterNumber, videoUrl);
+                this.setVideoSource(videoUrl);
+            }
+            
+            setOrientationPermission(value) {
+                this.orientationPermission = value;
+                console.log('🎯 Device orientation permission set to:', value);
+            }
+            
+            loadVideo(url) {
+                console.log('🎯 Loading video:', url);
+                this.showLoading();
+                
+                // Validate URL
+                if (!url || typeof url !== 'string') {
+                    this.showError('Invalid video URL provided', { url });
+                    return;
+                }
+                
+                // Set loading timeout
+                const loadingTimeout = setTimeout(() => {
+                    console.error('🎯 Video loading timeout');
+                    this.showError('Video loading timeout - please check your connection', { url });
+                }, 30000); // 30 seconds timeout
+                
+                // Clear timeout when video loads
+                const clearLoadingTimeout = () => {
+                    clearTimeout(loadingTimeout);
+                };
+                
+                try {
+                    if (url.includes('.m3u8')) {
+                        this.loadHLSVideo(url, clearLoadingTimeout);
+                    } else {
+                        this.loadDirectVideo(url, clearLoadingTimeout);
+                    }
+                } catch (error) {
+                    clearLoadingTimeout();
+                    console.error('🎯 Error loading video:', error);
+                    this.showError('Failed to load video', { url, error: error.message });
+                }
+            }
+            
+            loadHLSVideo(url, clearLoadingTimeout) {
+                console.log('🎯 Loading HLS video:', url);
+                if (Hls.isSupported()) {
+                    this.hlsPlayer = new Hls();
+                    this.hlsPlayer.loadSource(url);
+                    this.hlsPlayer.attachMedia(this.video);
+                    
+                    this.hlsPlayer.on(Hls.Events.MANIFEST_PARSED, () => {
+                        console.log('🎯 HLS manifest parsed');
+                        clearLoadingTimeout();
+                        
+                        // Ensure videosphere is updated with new source
+                        if (this.videosphere) {
+                            this.videosphere.setAttribute('src', '#video-asset');
+                            console.log('🎯 Updated videosphere source for HLS');
+                        }
+                        
+                        this.hideLoading();
+                    });
+                    
+                    this.hlsPlayer.on(Hls.Events.ERROR, (event, data) => {
+                        console.error('🎯 HLS error:', data);
+                        clearLoadingTimeout();
+                        this.showError('HLS streaming error - video may not be available', { 
+                            url, 
+                            errorType: data.type, 
+                            errorDetails: data.details 
+                        });
+                    });
+                } else if (this.video.canPlayType('application/vnd.apple.mpegurl')) {
+                    this.video.src = url;
+                    
+                    // Ensure videosphere is updated with new source
+                    if (this.videosphere) {
+                        this.videosphere.setAttribute('src', '#video-asset');
+                        console.log('🎯 Updated videosphere source for native HLS');
+                    }
+                    
+                    clearLoadingTimeout();
+                    this.hideLoading();
+                } else {
+                    clearLoadingTimeout();
+                    this.showError('HLS not supported on this device', { url });
+                }
+            }
+            
+            loadDirectVideo(url, clearLoadingTimeout) {
+                console.log('🎯 Loading direct video:', url);
+                
+                // Add error handling for direct video loading
+                this.video.onerror = (error) => {
+                    console.error('🎯 Direct video loading error:', error);
+                    clearLoadingTimeout();
+                    this.showError('Failed to load video file', { url, error: error.message });
+                };
+                
+                this.video.onloadedmetadata = () => {
+                    console.log('🎯 Direct video metadata loaded');
+                    clearLoadingTimeout();
+                    
+                    // Ensure videosphere is updated with new source
+                    if (this.videosphere) {
+                        this.videosphere.setAttribute('src', '#video-asset');
+                        console.log('🎯 Updated videosphere source');
+                    }
+                    
+                    this.hideLoading();
+                };
+                
+                this.video.src = url;
+                this.video.load();
+            }
+            
+            startPerformanceMonitoring() {
+                const monitorFrame = () => {
+                    const now = performance.now();
+                    this.performanceMonitor.frameCount++;
+                    
+                    if (this.performanceMonitor.lastFrameTime > 0) {
+                        const frameTime = now - this.performanceMonitor.lastFrameTime;
+                        this.performanceMonitor.fps = 1000 / frameTime;
+                        
+                        // Update average FPS
+                        if (this.performanceMonitor.frameCount > 10) {
+                            this.performanceMonitor.averageFps = 
+                                (this.performanceMonitor.averageFps * 0.9) + 
+                                (this.performanceMonitor.fps * 0.1);
+                        }
+                        
+                        // Detect frame drops
+                        if (this.performanceMonitor.fps < 25) {
+                            this.performanceMonitor.frameDrops++;
+                        }
+                        
+                        // Send FPS updates occasionally
+                        if (this.performanceMonitor.frameCount % 60 === 0) {
+                            this.sendMessage('fpsupdate', {
+                                fps: this.performanceMonitor.averageFps,
+                                frameDrops: this.performanceMonitor.frameDrops
+                            });
+                        }
+                    }
+                    
+                    this.performanceMonitor.lastFrameTime = now;
+                    
+                    if (this.isReady) {
+                        requestAnimationFrame(monitorFrame);
+                    }
+                };
+                
+                requestAnimationFrame(monitorFrame);
+            }
+            
+            detectDeviceCapabilities() {
+                const canvas = document.createElement('canvas');
+                const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+                
+                if (gl) {
+                    const renderer = gl.getParameter(gl.RENDERER);
+                    const vendor = gl.getParameter(gl.VENDOR);
+                    
+                    // Simple performance categorization
+                    if (renderer.includes('Mali') || renderer.includes('Adreno 3')) {
+                        this.devicePerformance = 'low';
+                    } else if (renderer.includes('Adreno 5') || renderer.includes('PowerVR')) {
+                        this.devicePerformance = 'medium';
+                    } else {
+                        this.devicePerformance = 'high';
+                    }
+                } else {
+                    this.devicePerformance = 'low';
+                }
+                
+                this.sendMessage('devicebenchmark', {
+                    category: this.devicePerformance,
+                    userAgent: navigator.userAgent
+                });
+            }
+            
+            detectNetworkQuality() {
+                if ('connection' in navigator) {
+                    const connection = navigator.connection;
+                    const effectiveType = connection.effectiveType;
+                    
+                    if (effectiveType === '4g') {
+                        this.networkQuality = 'high';
+                    } else if (effectiveType === '3g') {
+                        this.networkQuality = 'medium';
+                    } else {
+                        this.networkQuality = 'low';
+                    }
+                } else {
+                    this.networkQuality = 'unknown';
+                }
+                
+                this.sendMessage('networkdetected', {
+                    quality: this.networkQuality
+                });
+            }
+            
+            async requestDeviceOrientationPermission() {
+                if (typeof DeviceOrientationEvent !== 'undefined' && 
+                    typeof DeviceOrientationEvent.requestPermission === 'function') {
+                    
+                    try {
+                        const permission = await DeviceOrientationEvent.requestPermission();
+                        this.orientationPermission = permission;
+                        
+                        this.sendMessage('orientationpermission', {
+                            granted: permission === 'granted',
+                            permission: permission
+                        });
+                    } catch (error) {
+                        console.warn('🎯 Device orientation permission error:', error);
+                        this.orientationPermission = 'denied';
+                    }
+                } else {
+                    // Assume granted for non-iOS devices
+                    this.orientationPermission = 'granted';
+                }
+            }
+            
+            hasDeviceYaw() {
+                return 'DeviceOrientationEvent' in window;
+            }
+            
+            startSyncGracePeriod() {
+                this.isInSyncGracePeriod = true;
+                this.syncGracePeriodStart = performance.now();
+                
+                setTimeout(() => {
+                    this.isInSyncGracePeriod = false;
+                }, this.gracePeriodDuration);
+            }
+            
+            handleHeartbeat(timestamp) {
+                this.lastHeartbeat = timestamp;
+                this.connectionHealth = true;
+                
+                this.sendMessage('heartbeat-response', {
+                    timestamp: performance.now(),
+                    clientTimestamp: timestamp
+                });
+            }
+            
+            handlePing(timestamp) {
+                console.log('🎯 Ping received, sending pong response');
+                this.sendMessage('pong', {
+                    timestamp: performance.now(),
+                    clientTimestamp: timestamp,
+                    isReady: this.isReady,
+                    isSceneReady: this.isSceneReady,
+                    isVideoReady: this.isVideoReady,
+                    connectionHealth: this.connectionHealth
+                });
+            }
+            
+            getConnectionHealth() {
+                const now = performance.now();
+                const timeSinceLastHeartbeat = now - this.lastHeartbeat;
+                const isHealthy = timeSinceLastHeartbeat < 10000; // 10 seconds
+                
+                this.sendMessage('connectionhealthresponse', {
+                    healthy: isHealthy,
+                    lastHeartbeat: this.lastHeartbeat,
+                    timeSinceLastHeartbeat: timeSinceLastHeartbeat,
+                    performanceMonitor: this.performanceMonitor
+                });
+            }
+            
+            getPlaybackDebugInfo() {
+                const now = performance.now();
+                return {
+                    isPlaying: this.isPlaying,
+                    videoPaused: this.video ? this.video.paused : 'no video',
+                    videoCurrentTime: this.video ? this.video.currentTime : 'no video',
+                    lastPauseTime: this.lastPauseTime,
+                    lastPlayTime: this.lastPlayTime,
+                    timeSinceLastPause: now - this.lastPauseTime,
+                    timeSinceLastPlay: now - this.lastPlayTime,
+                    pauseGracePeriod: this.pauseGracePeriod,
+                    isInGracePeriod: (now - this.lastPauseTime) < this.pauseGracePeriod
+                };
+            }
+            
+            checkReadyState() {
+                if (this.isSceneReady && !this.isReady) {
+                    this.isReady = true;
+                    console.log('🎯 Viewer ready');
+                    this.hideLoading();
+                    
+                    // Start performance monitoring
+                    this.startPerformanceMonitoring();
+                }
+            }
+            
+            showLoading() {
+                const overlay = document.getElementById('loading-overlay');
+                if (overlay) {
+                    overlay.classList.add('show');
+                    overlay.classList.remove('hidden');
+                }
+            }
+            
+            hideLoading() {
+                const overlay = document.getElementById('loading-overlay');
+                if (overlay) {
+                    overlay.classList.remove('show');
+                    overlay.classList.add('hidden');
+                }
+            }
+            
+            showError(message, details = null) {
+                const overlay = document.getElementById('error-overlay');
+                const messageEl = document.getElementById('error-message');
+                
+                if (overlay && messageEl) {
+                    messageEl.textContent = message;
+                    overlay.style.display = 'flex';
+                }
+                
+                this.hideLoading();
+                
+                // Send error to parent for handling
+                this.sendMessage('error', {
+                    error: message,
+                    details: details,
+                    timestamp: performance.now(),
+                    recoverable: true
+                });
+                
+                // Auto-hide error after 5 seconds for non-critical errors
+                if (!message.includes('failed') && !message.includes('error')) {
+                    setTimeout(() => {
+                        this.hideError();
+                    }, 5000);
+                }
+            }
+            
+            hideError() {
+                const overlay = document.getElementById('error-overlay');
+                if (overlay) {
+                    overlay.style.display = 'none';
+                }
+            }
+            
+            cleanup() {
+                if (this.hlsPlayer) {
+                    this.hlsPlayer.destroy();
+                }
+                
+                if (this.video) {
+                    this.video.pause();
+                    this.video.src = '';
+                    this.video.load();
+                }
+                
+                this.sendMessage('cleanup-complete');
             }
         }
         
-        // Initialize the viewer when the DOM is ready
+        // Initialize the viewer when DOM is ready
         document.addEventListener('DOMContentLoaded', () => {
-            window.viewer360 = new Viewer360();
+            new HeadlessViewer360();
         });
-        
-        // Expose preload method
-        window.viewer360 = {
-            preload: (videoUrl) => {
-                if (window.viewer360 && window.viewer360.loadVideo) {
-                    window.viewer360.loadVideo(videoUrl);
-                }
-            },
-            isReady: () => {
-                return window.viewer360 && window.viewer360.isReady;
-            }
-        };
     </script>
 </body>
+</html> 
 </html> 
