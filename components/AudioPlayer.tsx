@@ -480,15 +480,25 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
           console.warn('🎬 Teaser XR scene loading timeout - clearing loading state');
           setIsXRLoading(false);
           
-          // Auto-play audio after timeout ONLY if we haven't already auto-played
-          if (audioRef.current && !hasAutoPlayedTeaser.current) {
-            hasAutoPlayedTeaser.current = true;
-            audioRef.current.play();
-            setIsPlaying(true);
-          }
-          
           // Force XR scene ready state on timeout
           setXRSceneReady(true);
+          
+          // Only attempt auto-play if we haven't already tried
+          if (audioRef.current && !hasAutoPlayedTeaser.current && !isPlaying) {
+            hasAutoPlayedTeaser.current = true;
+            console.log('🎬 Attempting timeout auto-play for teaser mode');
+            
+            audioRef.current.play()
+              .then(() => {
+                setIsPlaying(true);
+                console.log('🎬 Timeout auto-play successful for teaser mode');
+              })
+              .catch((error) => {
+                console.warn('🎬 Timeout auto-play failed (needs user interaction):', error);
+                setIsPlaying(false);
+                hasAutoPlayedTeaser.current = false; // Reset flag for manual play
+              });
+          }
         }
       }, 10000); // 10 second fallback
     }
@@ -500,15 +510,23 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
       console.log('🎯 XR Scene initialized for track:', tracks[currentTrack]?.title);
       
       // Auto-play audio in teaser mode when scene is ready - but ONLY on first load
-      if (isTeaserMode && audioRef.current && !isPlaying && !hasAutoPlayedTeaser.current) {
+      if (isTeaserMode && audioRef.current && !hasAutoPlayedTeaser.current) {
         hasAutoPlayedTeaser.current = true; // Prevent future auto-plays
-        setTimeout(() => {
-          if (audioRef.current && !isPlaying) { // Double-check user hasn't manually started playing
-            audioRef.current.play();
-            setIsPlaying(true);
-            console.log('🎬 Auto-playing teaser audio after XR scene ready (first time only)');
-          }
-        }, 500);
+        console.log('🎬 Attempting auto-play for teaser mode');
+        
+        // Ensure we're not already playing before attempting auto-play
+        if (!isPlaying) {
+          audioRef.current.play()
+            .then(() => {
+              setIsPlaying(true);
+              console.log('🎬 Auto-play successful for teaser mode');
+            })
+            .catch((error) => {
+              console.warn('🎬 Auto-play failed (likely needs user interaction):', error);
+              setIsPlaying(false);
+              hasAutoPlayedTeaser.current = false; // Reset flag so user can manually play
+            });
+        }
       }
     }
   }, [isXRMode, xrSceneReady, tracks, currentTrack, isTeaserMode, isPlaying]);
@@ -1330,27 +1348,66 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
   };
 
   const launchXRmode = () => {
-    if (track.isXR) {
-      console.log('🎯 Launching XR mode - seamless toggle (scene pre-loaded)');
-      setShowPlaylist(false);
-      
-      // Activate XR mode immediately - no loading since scene is persistent
-      setIsXRMode(true);
-      
-      // Send XR mode change message with device orientation permission
-      sendAudioMessage({
-        type: 'xr-mode-change',
-        timestamp: performance.now(),
-        data: {
-          isXRMode: true,
-          trackData: track,
-          deviceOrientationPermission: deviceOrientationPermission || {
-            granted: false,
-            requested: false,
-            supported: false
+    if (track.isXR && track.xrSrc) {
+      // Check if XR scene is ready before allowing entry
+      if (!xrSceneReady && !isXRLoading) {
+        console.log('🎯 XR scene not ready yet - starting loading sequence');
+        setIsXRLoading(true);
+        setXRSceneReady(false);
+        
+        // Start XR mode but stay in loading state
+        setIsXRMode(true);
+        
+        // Send XR mode change message
+        sendAudioMessage({
+          type: 'xr-mode-change',
+          timestamp: performance.now(),
+          data: {
+            isXRMode: true,
+            trackData: track,
+            deviceOrientationPermission: deviceOrientationPermission || {
+              granted: false,
+              requested: false,
+              supported: false
+            }
           }
-        }
-      });
+        });
+        
+        // Fallback timeout to clear loading state if scene doesn't respond
+        setTimeout(() => {
+          if (isXRLoading) {
+            console.warn('🎯 XR scene loading timeout - forcing ready state');
+            setIsXRLoading(false);
+            setXRSceneReady(true);
+          }
+        }, 15000); // 15 second timeout for initial scene load
+        
+      } else if (xrSceneReady && !isXRLoading) {
+        console.log('🎯 Launching XR mode - scene is ready');
+        setShowPlaylist(false);
+        
+        // Activate XR mode immediately since scene is ready
+        setIsXRMode(true);
+        
+        // Send XR mode change message with device orientation permission
+        sendAudioMessage({
+          type: 'xr-mode-change',
+          timestamp: performance.now(),
+          data: {
+            isXRMode: true,
+            trackData: track,
+            deviceOrientationPermission: deviceOrientationPermission || {
+              granted: false,
+              requested: false,
+              supported: false
+            }
+          }
+        });
+      } else {
+        console.log('🎯 XR mode already loading or transitioning - ignoring request');
+      }
+    } else {
+      console.warn('🎯 Cannot launch XR mode - track not XR-enabled or missing video source');
     }
   };
 
@@ -2287,10 +2344,29 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
                     variant="ghost"
                     size="icon"
                     onClick={launchXRmode}
-                    className="h-12 w-12 text-slate-300 hover:text-white hover:bg-white/20 transition-all duration-200 ease-out active:scale-95 rounded-lg"
+                    className={`h-12 w-12 transition-all duration-200 ease-out active:scale-95 rounded-lg ${
+                      !track.xrSrc || (!xrSceneReady && !isXRLoading)
+                        ? 'text-slate-500 cursor-not-allowed opacity-50'
+                        : isXRLoading
+                          ? 'text-yellow-400 hover:text-yellow-300 hover:bg-yellow-500/20'
+                          : 'text-slate-300 hover:text-white hover:bg-white/20'
+                    }`}
                     disabled={!track.xrSrc}
+                    title={
+                      !track.xrSrc 
+                        ? 'XR content not available' 
+                        : !xrSceneReady && !isXRLoading
+                          ? 'XR scene loading...'
+                          : isXRLoading
+                            ? 'Loading XR experience...'
+                            : 'Enter XR mode'
+                    }
                   >
-                    <Glasses className="h-5 w-5" />
+                    {isXRLoading ? (
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                    ) : (
+                      <Glasses className="h-5 w-5" />
+                    )}
                   </Button>
                 ) : (
                   <Button
