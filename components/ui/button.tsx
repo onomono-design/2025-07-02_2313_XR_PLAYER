@@ -39,6 +39,7 @@ function Button({
   variant,
   size,
   asChild = false,
+  onClick,
   ...props
 }: React.ComponentProps<"button"> &
   VariantProps<typeof buttonVariants> & {
@@ -46,10 +47,24 @@ function Button({
   }) {
   const Comp = asChild ? Slot : "button";
 
+  // Enhanced mobile touch feedback
+  const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+    // Haptic feedback simulation for mobile devices
+    if ('vibrate' in navigator && /Mobi|Android/i.test(navigator.userAgent)) {
+      navigator.vibrate(10); // Subtle haptic feedback
+    }
+    
+    // Call original onClick handler
+    if (onClick) {
+      onClick(e);
+    }
+  };
+
   return (
     <Comp
       data-slot="button"
       className={cn(buttonVariants({ variant, size, className }))}
+      onClick={asChild ? onClick : handleClick}
       {...props}
     />
   );

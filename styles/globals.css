@@ -216,6 +216,10 @@ body {
   .touch-target {
     min-height: 44px;
     min-width: 44px;
+    /* Enhanced touch responsiveness */
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
   }
   
   @media (min-width: 768px) {
@@ -223,6 +227,31 @@ body {
       min-height: 48px;
       min-width: 48px;
     }
+  }
+  
+  /* Mobile-specific optimizations */
+  .mobile-optimized {
+    /* Improve scrolling performance */
+    -webkit-overflow-scrolling: touch;
+    /* Reduce repaints during animations */
+    will-change: transform;
+    /* Optimize for mobile rendering */
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+  }
+  
+  /* Virtual keyboard handling */
+  .keyboard-adaptive {
+    /* Adjust for virtual keyboard */
+    padding-bottom: env(keyboard-inset-height, 0px);
+    transition: padding-bottom 0.3s ease;
+  }
+  
+  /* Network-aware image loading */
+  .network-optimized {
+    /* Prioritize critical images */
+    content-visibility: auto;
+    contain-intrinsic-size: 300px 200px;
   }
   
   /* Better scrolling on mobile */

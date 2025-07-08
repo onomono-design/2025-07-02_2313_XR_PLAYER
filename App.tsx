@@ -110,6 +110,57 @@ export default function App() {
     requested: false,
     supported: false,
   });
+  
+  // Mobile-specific state
+  const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
+  const [orientation, setOrientation] = useState<'portrait' | 'landscape'>('portrait');
+
+  // Mobile-specific optimization effects
+  useEffect(() => {
+    // Detect initial orientation
+    const updateOrientation = () => {
+      setOrientation(window.innerHeight > window.innerWidth ? 'portrait' : 'landscape');
+    };
+    
+    // Virtual keyboard detection for mobile
+    const handleResize = () => {
+      const viewportHeight = window.visualViewport?.height || window.innerHeight;
+      const windowHeight = window.innerHeight;
+      
+      // If viewport is significantly smaller than window, keyboard is likely open
+      const keyboardOpen = (windowHeight - viewportHeight) > 150;
+      setIsKeyboardOpen(keyboardOpen);
+      
+      updateOrientation();
+    };
+    
+    // Orientation change detection
+    const handleOrientationChange = () => {
+      // Small delay to allow for layout changes
+      setTimeout(updateOrientation, 100);
+    };
+    
+    // Initial setup
+    updateOrientation();
+    
+    // Add event listeners
+    window.addEventListener('resize', handleResize);
+    window.addEventListener('orientationchange', handleOrientationChange);
+    
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', handleResize);
+    }
+    
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('orientationchange', handleOrientationChange);
+      
+      if (window.visualViewport) {
+        window.visualViewport.removeEventListener('resize', handleResize);
+      }
+    };
+  }, []);
+
   // Handle audio sync messages from AudioPlayer with mode-aware logging
   const handleAudioMessage = (message: AudioMessage) => {
     const modePrefix = isTeaserMode ? "🎬 [TEASER]" : "🎵 [FULL]";
@@ -220,9 +271,9 @@ export default function App() {
   }, []);
 
   return (
-    <div className={`dark min-h-screen min-h-dvh bg-gradient-to-br from-slate-900 to-slate-800 ${APP_Z_LAYERS.BACKGROUND} overflow-hidden fixed inset-0`}>
+    <div className={`dark min-h-screen min-h-dvh bg-gradient-to-br from-slate-900 to-slate-800 ${APP_Z_LAYERS.BACKGROUND} overflow-hidden fixed inset-0 mobile-optimized`}>
       {/* Mobile-First App Container - Using fixed viewport height to prevent scrolling */}
-      <div className="fixed inset-0 w-full h-full max-w-none mx-auto flex flex-col safe-top safe-bottom safe-left safe-right">
+      <div className={`fixed inset-0 w-full h-full max-w-none mx-auto flex flex-col safe-top safe-bottom safe-left safe-right ${isKeyboardOpen ? 'keyboard-adaptive' : ''} ${orientation === 'landscape' ? 'landscape-compact' : ''}`}>
           {/* Main Content Area - AudioPlayer fills available space */}
           <div className={`flex-1 h-full overflow-hidden ${APP_Z_LAYERS.MAIN_CONTENT}`}>
             <AudioPlayer

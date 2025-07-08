@@ -384,15 +384,52 @@ export function ImageSlider({
                 : {}
             }
           >
+            {/* Enhanced loading state for images */}
+            <div className="absolute inset-0 flex items-center justify-center bg-slate-800/50 rounded-lg">
+              <div className="text-white/70 text-sm flex items-center gap-2">
+                <div className="w-4 h-4 border-2 border-white/30 border-t-white/70 rounded-full animate-spin"></div>
+                Loading image...
+              </div>
+            </div>
+            
             <img
               src={getImageUrl(img) || "/placeholder.svg"}
               alt={`${alt} ${index + 1}`}
               className={cn(
-                "w-full h-full object-cover pointer-events-none transition-opacity duration-200",
+                "w-full h-full object-cover pointer-events-none transition-opacity duration-200 network-optimized mobile-optimized",
                 isFullscreen ? "object-contain" : "object-cover"
               )}
               draggable="false"
               loading={index === activeIndex ? "eager" : "lazy"}
+              decoding="async"
+              onLoad={(e) => {
+                // Hide loading state
+                const loadingDiv = e.currentTarget.previousElementSibling as HTMLElement;
+                if (loadingDiv) {
+                  loadingDiv.style.display = 'none';
+                }
+                
+                // Improve mobile loading performance by preloading next image
+                if (index === activeIndex && images.length > 1) {
+                  const nextIndex = (index + 1) % images.length;
+                  const nextImg = new Image();
+                  nextImg.src = getImageUrl(images[nextIndex]) || "/placeholder.svg";
+                }
+              }}
+              onError={(e) => {
+                // Handle image loading errors gracefully
+                const loadingDiv = e.currentTarget.previousElementSibling as HTMLElement;
+                if (loadingDiv) {
+                  loadingDiv.innerHTML = `
+                    <div class="text-red-400 text-sm flex items-center gap-2">
+                      <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                      </svg>
+                      Failed to load
+                    </div>
+                  `;
+                }
+              }}
             />
           </div>
         ))}

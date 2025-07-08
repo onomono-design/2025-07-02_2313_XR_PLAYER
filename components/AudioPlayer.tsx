@@ -340,6 +340,11 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
   const [isLoadingImages, setIsLoadingImages] = useState(false);
   const [xrScenesPreloaded, setXRScenesPreloaded] = useState<{[key: string]: boolean}>({});
   
+  // Mobile-specific state
+  const [isMobileDevice, setIsMobileDevice] = useState(false);
+  const [isLowEndDevice, setIsLowEndDevice] = useState(false);
+  const [networkQuality, setNetworkQuality] = useState<'fast' | 'slow' | 'unknown'>('unknown');
+  
   // Image gallery state
   const [currentThumbnailIndex, setCurrentThumbnailIndex] = useState(0);
   const [fullscreenImageIndex, setFullscreenImageIndex] = useState(0);
@@ -375,6 +380,9 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
   const [xrSceneReady, setXRSceneReady] = useState(false);
   const [xrSceneInitialized, setXRSceneInitialized] = useState(false);
   
+  // Track videosphere material loading state (separate from scene ready)
+  const [videosphereMaterialReady, setVideosphereMaterialReady] = useState(false);
+  
   // Track if we've already auto-played in teaser mode to prevent repeated auto-play
   const hasAutoPlayedTeaser = useRef(false);
 
@@ -406,7 +414,47 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
     setXRSceneReady(true);
     setIsXRLoading(false); // Clear loading state when scene is actually ready
     console.log('✅ XR Loading state cleared - scene is ready');
-  }, []);
+    
+    // Auto-play audio in teaser mode when BOTH XR scene AND videosphere material are ready
+    if (isTeaserMode && audioRef.current && !hasAutoPlayedTeaser.current && !isPlaying && videosphereMaterialReady) {
+      hasAutoPlayedTeaser.current = true;
+      console.log('🎬 Attempting auto-play for teaser mode - both XR scene and videosphere material are ready');
+      
+      audioRef.current.play()
+        .then(() => {
+          setIsPlaying(true);
+          console.log('🎬 Auto-play successful for teaser mode');
+        })
+        .catch((error) => {
+          console.warn('🎬 Auto-play failed (likely needs user interaction):', error);
+          setIsPlaying(false);
+          hasAutoPlayedTeaser.current = false; // Reset flag so user can manually play
+        });
+    }
+  }, [isTeaserMode, isPlaying, videosphereMaterialReady]);
+
+  // Videosphere material ready callback - called when video is fully loaded and ready
+  const handleVideosphereMaterialReady = useCallback(() => {
+    console.log('🎯 Videosphere material ready callback triggered');
+    setVideosphereMaterialReady(true);
+    
+    // Auto-play audio in teaser mode when BOTH XR scene AND videosphere material are ready
+    if (isTeaserMode && audioRef.current && !hasAutoPlayedTeaser.current && !isPlaying && xrSceneReady) {
+      hasAutoPlayedTeaser.current = true;
+      console.log('🎬 Attempting auto-play for teaser mode - both XR scene and videosphere material are ready');
+      
+      audioRef.current.play()
+        .then(() => {
+          setIsPlaying(true);
+          console.log('🎬 Auto-play successful for teaser mode');
+        })
+        .catch((error) => {
+          console.warn('🎬 Auto-play failed (likely needs user interaction):', error);
+          setIsPlaying(false);
+          hasAutoPlayedTeaser.current = false; // Reset flag so user can manually play
+        });
+    }
+  }, [isTeaserMode, isPlaying, xrSceneReady]);
 
   // Handle seek requests from XR viewer
   const handleXRViewerSeek = useCallback((time: number) => {
@@ -454,6 +502,7 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
       console.log('🎬 Auto-starting XR mode for teaser');
       setIsXRLoading(true);
       setXRSceneReady(false); // Reset scene ready state
+      setVideosphereMaterialReady(false); // Reset videosphere material ready state
       hasAutoPlayedTeaser.current = false; // Reset auto-play flag for new session
       
       // Activate XR mode immediately (removed artificial delay)
@@ -474,33 +523,45 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
         }
       });
       
-      // Fallback timeout to clear loading state if scene doesn't respond
-      setTimeout(() => {
-        if (isXRLoading) {
-          console.warn('🎬 Teaser XR scene loading timeout - clearing loading state');
-          setIsXRLoading(false);
-          
-          // Force XR scene ready state on timeout
-          setXRSceneReady(true);
-          
-          // Only attempt auto-play if we haven't already tried
-          if (audioRef.current && !hasAutoPlayedTeaser.current && !isPlaying) {
-            hasAutoPlayedTeaser.current = true;
-            console.log('🎬 Attempting timeout auto-play for teaser mode');
+              // Fallback timeout to clear loading state if scene doesn't respond
+        setTimeout(() => {
+          if (isXRLoading) {
+            console.warn('🎬 Teaser XR scene loading timeout - clearing loading state');
+            setIsXRLoading(false);
             
-            audioRef.current.play()
-              .then(() => {
-                setIsPlaying(true);
-                console.log('🎬 Timeout auto-play successful for teaser mode');
-              })
-              .catch((error) => {
-                console.warn('🎬 Timeout auto-play failed (needs user interaction):', error);
-                setIsPlaying(false);
-                hasAutoPlayedTeaser.current = false; // Reset flag for manual play
-              });
+            // Force XR scene ready state on timeout
+            setXRSceneReady(true);
+            
+            // Note: Auto-play is now handled by videosphere material ready callback
+            // No immediate auto-play attempt here to prevent race conditions
           }
-        }
-      }, 10000); // 10 second fallback
+        }, 10000); // 10 second fallback
+        
+        // Additional safety timeout for videosphere material loading
+        setTimeout(() => {
+          if (isXRLoading || (!videosphereMaterialReady && xrSceneReady)) {
+            console.warn('🎬 Teaser videosphere material loading timeout - forcing material ready state');
+            setIsXRLoading(false);
+            setVideosphereMaterialReady(true);
+            
+            // Attempt auto-play after forcing material ready state
+            if (isTeaserMode && audioRef.current && !hasAutoPlayedTeaser.current && !isPlaying) {
+              hasAutoPlayedTeaser.current = true;
+              console.log('🎬 Attempting timeout auto-play for teaser mode');
+              
+              audioRef.current.play()
+                .then(() => {
+                  setIsPlaying(true);
+                  console.log('🎬 Timeout auto-play successful for teaser mode');
+                })
+                .catch((error) => {
+                  console.warn('🎬 Timeout auto-play failed (needs user interaction):', error);
+                  setIsPlaying(false);
+                  hasAutoPlayedTeaser.current = false; // Reset flag for manual play
+                });
+            }
+          }
+        }, 15000); // 15 second fallback for videosphere material
     }
   }, [isTeaserMode, tracks.length, isXRLoading, isXRMode, sendAudioMessage, deviceOrientationPermission, currentTrack]);
 
@@ -509,27 +570,58 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
     if (isXRMode && xrSceneReady) {
       console.log('🎯 XR Scene initialized for track:', tracks[currentTrack]?.title);
       
-      // Auto-play audio in teaser mode when scene is ready - but ONLY on first load
-      if (isTeaserMode && audioRef.current && !hasAutoPlayedTeaser.current) {
-        hasAutoPlayedTeaser.current = true; // Prevent future auto-plays
-        console.log('🎬 Attempting auto-play for teaser mode');
-        
-        // Ensure we're not already playing before attempting auto-play
-        if (!isPlaying) {
-          audioRef.current.play()
-            .then(() => {
-              setIsPlaying(true);
-              console.log('🎬 Auto-play successful for teaser mode');
-            })
-            .catch((error) => {
-              console.warn('🎬 Auto-play failed (likely needs user interaction):', error);
-              setIsPlaying(false);
-              hasAutoPlayedTeaser.current = false; // Reset flag so user can manually play
-            });
+      // Note: Auto-play is now handled by videosphere material ready callback
+      // This ensures audio doesn't start until videosphere material is fully loaded
+    }
+  }, [isXRMode, xrSceneReady, tracks, currentTrack]);
+
+  // Mobile device and capability detection
+  useEffect(() => {
+    const detectDeviceCapabilities = () => {
+      // Mobile device detection
+      const isMobile = /Mobi|Android|iPhone|iPad|iPod|BlackBerry|Opera Mini/i.test(navigator.userAgent);
+      setIsMobileDevice(isMobile);
+      
+      // Low-end device detection
+      const isLowEnd = (
+        navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4
+      ) || (
+        'deviceMemory' in navigator && (navigator as any).deviceMemory <= 4
+      );
+      setIsLowEndDevice(!!isLowEnd);
+      
+      // Network quality detection
+      if ('connection' in navigator) {
+        const connection = (navigator as any).connection;
+        if (connection) {
+          const effectiveType = connection.effectiveType;
+          if (effectiveType === '4g' || effectiveType === '3g') {
+            setNetworkQuality('fast');
+          } else if (effectiveType === '2g' || effectiveType === 'slow-2g') {
+            setNetworkQuality('slow');
+          }
+          
+          // Listen for network changes
+          connection.addEventListener('change', () => {
+            const newType = connection.effectiveType;
+            setNetworkQuality(
+              newType === '4g' || newType === '3g' ? 'fast' : 
+              newType === '2g' || newType === 'slow-2g' ? 'slow' : 'unknown'
+            );
+          });
         }
       }
-    }
-  }, [isXRMode, xrSceneReady, tracks, currentTrack, isTeaserMode, isPlaying]);
+      
+      console.log('📱 Device capabilities:', { 
+        isMobile, 
+        isLowEnd, 
+        hardwareConcurrency: navigator.hardwareConcurrency,
+        deviceMemory: (navigator as any).deviceMemory
+      });
+    };
+
+    detectDeviceCapabilities();
+  }, []);
 
   // Measure container dimensions
   useEffect(() => {
@@ -734,6 +826,9 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
     // Initialize XR scene immediately for seamless toggling
     setXRSceneInitialized(true);
     
+    // Reset videosphere material ready state for new tracks
+    setVideosphereMaterialReady(false);
+    
     // Pre-load XR scenes for tracks with XR content
     convertedTracks.forEach(track => {
       if (track.isXR && track.xrSrc) {
@@ -853,6 +948,7 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
         setCurrentThumbnailIndex(0); // Always reset to first image
         setIsXRMode(false); // Always start new track in Audio Only mode
         setIsFullscreenMode(false); // Exit fullscreen mode
+        setVideosphereMaterialReady(false); // Reset videosphere material ready state
         
         // Auto-play the next track after a brief delay
         setTimeout(() => {
@@ -1037,24 +1133,47 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
         {/* Audio Controller Skeleton */}
         <div className="flex-shrink-0 mx-4 md:mx-6 lg:mx-8 mb-6 md:mb-8">
           <div className="bg-slate-900/95 dark:bg-slate-50/95 backdrop-blur-sm rounded-lg p-4 md:p-6 lg:p-8 max-w-lg mx-auto touch-target">
+            {/* Enhanced loading skeleton with mobile optimizations */}
             <div className="text-center mb-4">
-              <Skeleton className="h-6 w-48 mx-auto mb-2" />
-              <Skeleton className="h-4 w-32 mx-auto mb-1" />
-              <Skeleton className="h-3 w-24 mx-auto" />
-            </div>
-            <Skeleton className="h-2 w-full mb-2" />
-            <div className="flex justify-between mb-4">
-              <Skeleton className="h-3 w-8" />
-              <Skeleton className="h-3 w-8" />
-            </div>
-            <div className="flex items-center justify-between">
-              <Skeleton className="h-10 w-10 rounded-md" />
-              <div className="flex items-center space-x-3">
-                <Skeleton className="h-10 w-10 rounded-md" />
-                <Skeleton className="h-12 w-12 rounded-md" />
-                <Skeleton className="h-10 w-10 rounded-md" />
+              <div className="relative">
+                <Skeleton className="h-6 w-48 mx-auto mb-2 mobile-optimized" />
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-pulse"></div>
               </div>
-              <Skeleton className="h-10 w-10 rounded-md" />
+              <Skeleton className="h-4 w-32 mx-auto mb-1 mobile-optimized" />
+              <Skeleton className="h-3 w-24 mx-auto mobile-optimized" />
+              
+              {/* Loading progress indicator */}
+              <div className="mt-3 flex items-center justify-center gap-2 text-slate-400 text-xs">
+                <div className="w-1 h-1 bg-slate-400 rounded-full animate-pulse"></div>
+                <div className="w-1 h-1 bg-slate-400 rounded-full animate-pulse" style={{animationDelay: '0.2s'}}></div>
+                <div className="w-1 h-1 bg-slate-400 rounded-full animate-pulse" style={{animationDelay: '0.4s'}}></div>
+                <span>Loading audio tour...</span>
+              </div>
+            </div>
+            
+            {/* Enhanced progress bar skeleton */}
+            <div className="relative mb-2">
+              <Skeleton className="h-2 w-full mobile-optimized" />
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-blue-400/30 to-transparent animate-pulse"></div>
+            </div>
+            
+            <div className="flex justify-between mb-4">
+              <Skeleton className="h-3 w-8 mobile-optimized" />
+              <Skeleton className="h-3 w-8 mobile-optimized" />
+            </div>
+            
+            {/* Enhanced control buttons skeleton */}
+            <div className="flex items-center justify-between">
+              <Skeleton className="h-10 w-10 rounded-md mobile-optimized" />
+              <div className="flex items-center space-x-3">
+                <Skeleton className="h-10 w-10 rounded-md mobile-optimized" />
+                <div className="relative">
+                  <Skeleton className="h-12 w-12 rounded-md mobile-optimized" />
+                  <div className="absolute inset-0 border-2 border-blue-400/30 rounded-md animate-pulse"></div>
+                </div>
+                <Skeleton className="h-10 w-10 rounded-md mobile-optimized" />
+              </div>
+              <Skeleton className="h-10 w-10 rounded-md mobile-optimized" />
             </div>
           </div>
         </div>
@@ -1109,6 +1228,7 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
     setIsTransitioning(false);
     setIsDragging(false);
     setDragOffset(0);
+    setVideosphereMaterialReady(false); // Reset videosphere material ready state
 
     // Send track change message
     sendAudioMessage({
@@ -1163,6 +1283,7 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
     setIsTransitioning(false);
     setIsDragging(false);
     setDragOffset(0);
+    setVideosphereMaterialReady(false); // Reset videosphere material ready state
 
     // Send track change message
     sendAudioMessage({
@@ -1349,11 +1470,15 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
 
   const launchXRmode = () => {
     if (track.isXR && track.xrSrc) {
-      // Check if XR scene is ready before allowing entry
-      if (!xrSceneReady && !isXRLoading) {
-        console.log('🎯 XR scene not ready yet - starting loading sequence');
+      // Check if both XR scene AND videosphere material are ready before allowing entry
+      if (!xrSceneReady || !videosphereMaterialReady) {
+        console.log('🎯 XR not fully ready yet - starting loading sequence', {
+          xrSceneReady,
+          videosphereMaterialReady
+        });
         setIsXRLoading(true);
         setXRSceneReady(false);
+        setVideosphereMaterialReady(false);
         
         // Start XR mode but stay in loading state
         setIsXRMode(true);
@@ -1376,17 +1501,18 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
         // Fallback timeout to clear loading state if scene doesn't respond
         setTimeout(() => {
           if (isXRLoading) {
-            console.warn('🎯 XR scene loading timeout - forcing ready state');
+            console.warn('🎯 XR loading timeout - forcing ready state');
             setIsXRLoading(false);
             setXRSceneReady(true);
+            setVideosphereMaterialReady(true);
           }
         }, 15000); // 15 second timeout for initial scene load
         
-      } else if (xrSceneReady && !isXRLoading) {
-        console.log('🎯 Launching XR mode - scene is ready');
+      } else if (xrSceneReady && videosphereMaterialReady && !isXRLoading) {
+        console.log('🎯 Launching XR mode - scene and material fully ready');
         setShowPlaylist(false);
         
-        // Activate XR mode immediately since scene is ready
+        // Activate XR mode immediately since everything is ready
         setIsXRMode(true);
         
         // Send XR mode change message with device orientation permission
@@ -1632,6 +1758,22 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
           <div className="mb-3 flex items-center justify-center gap-2 text-yellow-300 text-xs">
             <div className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse"></div>
             <span>Initializing XR scene...</span>
+          </div>
+        )}
+        
+        {/* Videosphere Material Status Indicator */}
+        {xrSceneReady && !videosphereMaterialReady && (
+          <div className="mb-3 flex items-center justify-center gap-2 text-blue-300 text-xs">
+            <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
+            <span>Loading videosphere material...</span>
+          </div>
+        )}
+        
+        {/* Sync Status Indicator (Teaser Mode) */}
+        {isTeaserMode && xrSceneReady && videosphereMaterialReady && !isPlaying && (
+          <div className="mb-3 flex items-center justify-center gap-2 text-green-300 text-xs">
+            <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+            <span>Ready to play - fully synchronized</span>
           </div>
         )}
         
@@ -2016,6 +2158,7 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
             currentTime={currentTime}
             onReady={handleXRSceneReady}
             onSeek={handleXRViewerSeek}
+            onVideosphereMaterialReady={handleVideosphereMaterialReady}
           />
         </div>
       )}
@@ -2116,16 +2259,7 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
             </div>
           )}
           
-          {/* XR Content Area - Simplified description (only if no teaser CTA) */}
-          {!(isTeaserMode && showTeaser && track.teaserBacklink) && (
-            <div className={`fixed bottom-32 md:bottom-36 lg:bottom-40 left-1/2 transform -translate-x-1/2 ${Z_LAYERS.XR_CONTROLS} safe-bottom`}>
-              <div className="bg-black/40 backdrop-blur-sm rounded-lg p-3 border border-white/20 text-center max-w-sm mx-auto">
-                <p className="text-white/90 text-sm">
-                  {isTeaserMode ? track.title : 'Welcome to our historic district'}
-                </p>
-              </div>
-            </div>
-          )}
+
 
           {/* XR Bottom Section - Audio Controller */}
           <div className={`fixed bottom-0 left-0 right-0 ${Z_LAYERS.XR_CONTROLS} safe-bottom`}>
@@ -2291,8 +2425,11 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
                   size="icon"
                   onClick={togglePlaylist}
                   className="h-12 w-12 text-slate-300 hover:text-white hover:bg-white/20 transition-all duration-200 ease-out active:scale-95"
+                  aria-label={showPlaylist ? "Hide playlist" : "Show playlist"}
+                  aria-expanded={showPlaylist}
+                  aria-controls="playlist-menu"
                 >
-                  <List className="h-5 w-5" />
+                  <List className="h-5 w-5" aria-hidden="true" />
                 </Button>
               
                               {/* Center - Main Controls - Larger Touch Targets */}
@@ -2307,19 +2444,26 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
                         ? 'text-slate-500 cursor-not-allowed opacity-50'
                         : 'text-slate-300 hover:text-white hover:bg-white/20'
                     }`}
+                    aria-label="Previous track"
+                    aria-disabled={isTeaserMode}
+                    tabIndex={isTeaserMode ? -1 : 0}
                   >
-                    <SkipBack className="h-6 w-6" />
+                    <SkipBack className="h-6 w-6" aria-hidden="true" />
                   </Button>
 
                   <Button
                     onClick={togglePlay}
                     size="icon"
                     className="h-16 w-16 bg-white hover:bg-slate-100 active:bg-slate-200 text-slate-900 rounded-full transition-all duration-200 ease-out active:scale-95 hover:scale-105 shadow-lg"
+                    aria-label={isPlaying ? "Pause audio" : "Play audio"}
+                    aria-pressed={isPlaying}
+                    role="button"
+                    tabIndex={0}
                   >
                     {isPlaying ? (
-                      <Pause className="h-7 w-7" />
+                      <Pause className="h-7 w-7" aria-hidden="true" />
                     ) : (
-                      <Play className="h-7 w-7 ml-0.5" />
+                      <Play className="h-7 w-7 ml-0.5" aria-hidden="true" />
                     )}
                   </Button>
 
@@ -2333,8 +2477,11 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
                         ? 'text-slate-500 cursor-not-allowed opacity-50'
                         : 'text-slate-300 hover:text-white hover:bg-white/20'
                     }`}
+                    aria-label="Next track"
+                    aria-disabled={isTeaserMode}
+                    tabIndex={isTeaserMode ? -1 : 0}
                   >
-                    <SkipForward className="h-6 w-6" />
+                    <SkipForward className="h-6 w-6" aria-hidden="true" />
                   </Button>
                 </div>
 
@@ -2345,21 +2492,23 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
                     size="icon"
                     onClick={launchXRmode}
                     className={`h-12 w-12 transition-all duration-200 ease-out active:scale-95 rounded-lg ${
-                      !track.xrSrc || (!xrSceneReady && !isXRLoading)
+                      !track.xrSrc || (!xrSceneReady || !videosphereMaterialReady) && !isXRLoading
                         ? 'text-slate-500 cursor-not-allowed opacity-50'
                         : isXRLoading
                           ? 'text-yellow-400 hover:text-yellow-300 hover:bg-yellow-500/20'
                           : 'text-slate-300 hover:text-white hover:bg-white/20'
                     }`}
-                    disabled={!track.xrSrc}
+                    disabled={!track.xrSrc || ((!xrSceneReady || !videosphereMaterialReady) && !isXRLoading)}
                     title={
                       !track.xrSrc 
                         ? 'XR content not available' 
                         : !xrSceneReady && !isXRLoading
                           ? 'XR scene loading...'
-                          : isXRLoading
-                            ? 'Loading XR experience...'
-                            : 'Enter XR mode'
+                          : !videosphereMaterialReady && !isXRLoading
+                            ? 'Videosphere material loading...'
+                            : isXRLoading
+                              ? 'Loading XR experience...'
+                              : 'Enter XR mode'
                     }
                   >
                     {isXRLoading ? (

@@ -18,6 +18,7 @@ interface XRSceneProps {
   currentTime?: number; // Current audio time for sync
   onReady?: () => void; // Callback when viewer is ready
   onSeek?: (time: number) => void; // Callback when user seeks in viewer
+  onVideosphereMaterialReady?: () => void; // Callback when videosphere material is loaded and ready
 }
 
 // Enhanced message types for comprehensive 360° viewer communication
@@ -52,7 +53,8 @@ export function XRScene({
   videoSrc,
   currentTime = 0,
   onReady,
-  onSeek
+  onSeek,
+  onVideosphereMaterialReady
 }: XRSceneProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [isViewerReady, setIsViewerReady] = useState(false);
@@ -76,16 +78,21 @@ export function XRScene({
   const [networkQuality, setNetworkQuality] = useState<string>('unknown');
   const initializationTimeoutRef = useRef<number | null>(null);
 
-  // Enhanced initialization system with multiple fallback strategies
+  // Enhanced initialization system with mobile-optimized fallback strategies
   useEffect(() => {
     console.log('🎯 XRScene mounted, starting enhanced initialization');
     
+    // Detect mobile device for optimized initialization
+    const isMobile = /Mobi|Android|iPhone|iPad|iPod|BlackBerry|Opera Mini/i.test(navigator.userAgent);
+    const isLowEndDevice = navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4;
+    
     let attemptCount = 0;
-    const maxAttempts = 3;
+    const maxAttempts = isMobile ? 2 : 3; // Fewer attempts on mobile to save battery
+    const retryDelay = isMobile ? 1500 : 1000; // Longer delays on mobile
     
     const attemptInitialization = () => {
       attemptCount++;
-      console.log(`🎯 Initialization attempt ${attemptCount}/${maxAttempts}`);
+      console.log(`🎯 Initialization attempt ${attemptCount}/${maxAttempts} (Mobile: ${isMobile})`);
       
       if (attemptCount >= maxAttempts) {
         console.warn('🎯 XRScene initialization failed after max attempts - forcing ready state');
@@ -102,29 +109,36 @@ export function XRScene({
           iframeRef.current.contentWindow.postMessage({
             channel: 'viewer-360-headless',
             type: 'ping',
-            timestamp: performance.now()
+            timestamp: performance.now(),
+            deviceInfo: {
+              isMobile,
+              isLowEndDevice,
+              hardwareConcurrency: navigator.hardwareConcurrency
+            }
           }, '*');
           
-          // Wait for response, if none comes, try again
+          // Adaptive timeout based on device capability
+          const timeout = isMobile || isLowEndDevice ? 3000 : 2000;
           setTimeout(() => {
             if (!isViewerReady) {
               console.log('🎯 No response to ping, retrying initialization...');
               attemptInitialization();
             }
-          }, 2000); // Wait 2 seconds between attempts
+          }, timeout);
           
         } catch (error) {
           console.error('🎯 Error pinging iframe:', error);
-          setTimeout(attemptInitialization, 1000); // Retry after 1 second
+          setTimeout(attemptInitialization, retryDelay);
         }
       } else {
         console.log('🎯 Iframe not ready, waiting before retry...');
-        setTimeout(attemptInitialization, 1000); // Wait for iframe to load
+        setTimeout(attemptInitialization, retryDelay);
       }
     };
     
-    // Start initial attempt after a brief delay to let iframe load
-    initializationTimeoutRef.current = setTimeout(attemptInitialization, 500);
+    // Mobile-optimized initial delay
+    const initialDelay = isMobile ? 800 : 500;
+    initializationTimeoutRef.current = setTimeout(attemptInitialization, initialDelay);
 
     return () => {
       if (initializationTimeoutRef.current) {
@@ -358,10 +372,29 @@ export function XRScene({
           }
           break;
 
+        case 'loadstart':
+          console.log('🎯 Videosphere material loading started');
+          // Don't trigger ready callback yet, just log for debugging
+          break;
+          
         case 'loaded':
+          console.log('🎯 Videosphere material loaded (direct video)');
+          onVideosphereMaterialReady?.();
+          break;
+          
+        case 'loadedmetadata':
+          console.log('🎯 Videosphere metadata loaded');
+          onVideosphereMaterialReady?.();
           break;
           
         case 'hls-manifest-parsed':
+          console.log('🎯 Videosphere material loaded (HLS manifest parsed)');
+          onVideosphereMaterialReady?.();
+          break;
+
+        case 'canplaythrough':
+          console.log('🎯 Videosphere material can play through');
+          onVideosphereMaterialReady?.();
           break;
 
         case 'buffering':
@@ -385,7 +418,8 @@ export function XRScene({
           break;
 
         case 'preloaded':
-          console.log('🎯 Content preloaded:', message);
+          console.log('🎯 Content preloaded - videosphere material ready:', message);
+          onVideosphereMaterialReady?.();
           break;
 
         case 'mutechange':

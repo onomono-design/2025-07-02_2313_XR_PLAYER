@@ -43,7 +43,14 @@ export function AudioSlider({
 }: AudioSliderProps) {
   const [isDragging, setIsDragging] = React.useState(false);
   const [hoverPosition, setHoverPosition] = React.useState<number | null>(null);
+  const [isMobileDevice, setIsMobileDevice] = React.useState(false);
   const trackRef = React.useRef<HTMLDivElement>(null);
+
+  // Detect mobile device for optimized touch interactions
+  React.useEffect(() => {
+    const isMobile = /Mobi|Android|iPhone|iPad|iPod|BlackBerry|Opera Mini/i.test(navigator.userAgent);
+    setIsMobileDevice(isMobile);
+  }, []);
 
   const formatTime = (time: number) => {
     const minutes = Math.floor(time / 60);
@@ -59,13 +66,31 @@ export function AudioSlider({
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
-    if (!showTimeTooltip) return;
+    if (!showTimeTooltip || isMobileDevice) return;
     const time = getTimeFromPosition(e.clientX);
     setHoverPosition(time);
   };
 
   const handleMouseLeave = () => {
-    setHoverPosition(null);
+    if (!isMobileDevice) {
+      setHoverPosition(null);
+    }
+  };
+
+  // Enhanced touch handling for mobile devices
+  const handleTouchStart = () => {
+    if (isMobileDevice && 'vibrate' in navigator) {
+      navigator.vibrate(5); // Light haptic feedback on touch start
+    }
+    setIsDragging(true);
+  };
+
+  const handleTouchEnd = () => {
+    setIsDragging(false);
+    // Keep hover position visible briefly on mobile for feedback
+    if (isMobileDevice) {
+      setTimeout(() => setHoverPosition(null), 1000);
+    }
   };
 
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
@@ -99,6 +124,8 @@ export function AudioSlider({
         className={baseSliderClasses}
         onMouseMove={handleMouseMove}
         onMouseLeave={handleMouseLeave}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
         onValueChange={() => setIsDragging(true)}
         onValueCommit={() => setIsDragging(false)}
         {...props}
@@ -116,7 +143,7 @@ export function AudioSlider({
             style={{ width: `${bufferProgress}%` }}
           />
           
-          {/* Played progress - shows current position - REMOVED ANIMATION */}
+          {/* Played progress - shows current position */}
           <SliderPrimitive.Range
             className={cn(
               "absolute h-full rounded-full",
@@ -124,20 +151,6 @@ export function AudioSlider({
               variant === "glass" && "bg-white/70",
               variant === "gradient" && "bg-gradient-to-r from-blue-500 to-purple-600",
             )}
-          />
-          
-          {/* Unplayed region indicator - REMOVED ANIMATION */}
-          <div
-            className={cn(
-              "absolute right-0 h-full rounded-full",
-              variant === "default" && "bg-slate-500/30",
-              variant === "glass" && "bg-white/10",
-              variant === "gradient" && "bg-slate-500/30",
-            )}
-            style={{ 
-              width: `${100 - progress}%`,
-              right: 0
-            }}
           />
         </SliderPrimitive.Track>
         
@@ -149,10 +162,7 @@ export function AudioSlider({
         />
       </SliderPrimitive.Root>
 
-      {/* Progress percentage indicator */}
-      <div className="absolute -top-6 left-0 text-xs text-slate-400">
-        {duration > 0 ? `${Math.round(progress)}%` : '0%'}
-      </div>
+
 
       {/* Hover time tooltip */}
       {showTimeTooltip && hoverPosition !== null && !isDragging && (
