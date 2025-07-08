@@ -119,7 +119,7 @@ interface DeviceOrientationPermissionState {
 
 // Audio sync message types for iframe communication - Updated for 360° viewer protocol
 export interface AudioSyncMessage {
-  type: 'playback-state' | 'time-update' | 'seek' | 'track-change' | 'volume-change' | 'init' | 'recenter' | 'xr-mode-change' | 'device-orientation-permission';
+  type: 'playback-state' | 'time-update' | 'seek' | 'track-change' | 'volume-change' | 'init' | 'recenter' | 'xr-mode-change' | 'device-orientation-permission' | 'xr-scene-fully-ready';
   timestamp: number;
   data?: any;
 }
@@ -206,12 +206,22 @@ export interface DeviceOrientationPermissionMessage extends AudioSyncMessage {
   data: DeviceOrientationPermissionState;
 }
 
-export type AudioMessage = PlaybackStateMessage | TimeUpdateMessage | SeekMessage | TrackChangeMessage | VolumeChangeMessage | InitMessage | RecenterMessage | XRModeChangeMessage | DeviceOrientationPermissionMessage;
+export interface XRSceneFullyReadyMessage extends AudioSyncMessage {
+  type: 'xr-scene-fully-ready';
+  data: {
+    xrSceneReady: boolean;
+    videosphereMaterialReady: boolean;
+    timestamp: number;
+  };
+}
+
+export type AudioMessage = PlaybackStateMessage | TimeUpdateMessage | SeekMessage | TrackChangeMessage | VolumeChangeMessage | InitMessage | RecenterMessage | XRModeChangeMessage | DeviceOrientationPermissionMessage | XRSceneFullyReadyMessage;
 
 interface AudioPlayerProps {
   onAudioMessage?: (message: AudioMessage) => void;
   deviceOrientationPermission?: DeviceOrientationPermissionState;
   isTeaserMode?: boolean;
+  teaserPreloading?: boolean;
 }
 
 // Enhanced configuration with teaser-specific content
@@ -320,7 +330,7 @@ const teaserTourConfig: TourConfig = {
   }
 };
 
-export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTeaserMode = false }: AudioPlayerProps) {
+export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTeaserMode = false, teaserPreloading = false }: AudioPlayerProps) {
   // Audio state
   const [tracks, setTracks] = useState<Track[]>([]);
   const [currentTrack, setCurrentTrack] = useState(0);
@@ -378,6 +388,7 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
   // XR Scene state - Always maintain scene for seamless toggling
   const [xrSceneReady, setXRSceneReady] = useState(false);
   const [xrSceneInitialized, setXRSceneInitialized] = useState(false);
+  const [xrSceneVisible, setXRSceneVisible] = useState(false);
   
   // Track videosphere material loading state (separate from scene ready)
   const [videosphereMaterialReady, setVideosphereMaterialReady] = useState(false);
@@ -407,53 +418,111 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
   // Note: XR Scene commands are handled through props and React state
   // No direct messaging needed with Three.js component
 
-  // XR Scene ready callback - Fix loading state issue
+  // XR Scene ready callback - Auto-play audio immediately when ready in teaser mode
   const handleXRSceneReady = useCallback(() => {
     console.log('🎯 XR Scene ready callback triggered - clearing loading state');
     setXRSceneReady(true);
     setIsXRLoading(false); // Clear loading state when scene is actually ready
     console.log('✅ XR Loading state cleared - scene is ready');
     
-    // Auto-play audio in teaser mode when BOTH XR scene AND videosphere material are ready
-    if (isTeaserMode && audioRef.current && !hasAutoPlayedTeaser.current && !isPlaying && videosphereMaterialReady) {
-      hasAutoPlayedTeaser.current = true;
-      console.log('🎬 Attempting auto-play for teaser mode - both XR scene and videosphere material are ready');
+    // Check if both scene and material are ready to send fully ready message and auto-play
+    if (videosphereMaterialReady) {
+      console.log('🎯 Both XR scene and videosphere material ready - sending fully ready message');
+      sendAudioMessage({
+        type: 'xr-scene-fully-ready',
+        timestamp: performance.now(),
+        data: {
+          xrSceneReady: true,
+          videosphereMaterialReady: true,
+          timestamp: performance.now()
+        }
+      });
       
-      audioRef.current.play()
-        .then(() => {
-          setIsPlaying(true);
-          console.log('🎬 Auto-play successful for teaser mode');
-        })
-        .catch((error) => {
-          console.warn('🎬 Auto-play failed (likely needs user interaction):', error);
-          setIsPlaying(false);
-          hasAutoPlayedTeaser.current = false; // Reset flag so user can manually play
-        });
+      // Auto-play immediately in teaser mode (user clicked "Try Free Preview" = consent)
+      if (isTeaserMode && audioRef.current && !hasAutoPlayedTeaser.current) {
+        hasAutoPlayedTeaser.current = true;
+        console.log('🎬 Auto-playing teaser immediately - user clicked preview button (consent given)');
+        
+        // Force play the audio since user already interacted with the page
+        const playPromise = audioRef.current.play();
+        if (playPromise !== undefined) {
+          playPromise
+            .then(() => {
+              setIsPlaying(true);
+              console.log('🎬 ✅ Auto-play successful for teaser mode');
+              
+              // Send playback state message
+              sendAudioMessage({
+                type: 'playback-state',
+                timestamp: performance.now(),
+                data: {
+                  isPlaying: true,
+                  currentTime: audioRef.current?.currentTime || 0,
+                  duration: audioRef.current?.duration || 0
+                }
+              });
+            })
+            .catch((error) => {
+              console.warn('🎬 ⚠️ Auto-play failed - will require manual play:', error);
+              setIsPlaying(false);
+              hasAutoPlayedTeaser.current = false; // Reset flag so user can manually play
+            });
+        }
+      }
     }
-  }, [isTeaserMode, isPlaying, videosphereMaterialReady]);
+  }, [isTeaserMode, videosphereMaterialReady, sendAudioMessage]);
 
-  // Videosphere material ready callback - called when video is fully loaded and ready
+  // Videosphere material ready callback - Auto-play audio immediately when ready in teaser mode
   const handleVideosphereMaterialReady = useCallback(() => {
     console.log('🎯 Videosphere material ready callback triggered');
     setVideosphereMaterialReady(true);
     
-    // Auto-play audio in teaser mode when BOTH XR scene AND videosphere material are ready
-    if (isTeaserMode && audioRef.current && !hasAutoPlayedTeaser.current && !isPlaying && xrSceneReady) {
-      hasAutoPlayedTeaser.current = true;
-      console.log('🎬 Attempting auto-play for teaser mode - both XR scene and videosphere material are ready');
+    // Check if both scene and material are ready to send fully ready message and auto-play
+    if (xrSceneReady) {
+      console.log('🎯 Both XR scene and videosphere material ready - sending fully ready message');
+      sendAudioMessage({
+        type: 'xr-scene-fully-ready',
+        timestamp: performance.now(),
+        data: {
+          xrSceneReady: true,
+          videosphereMaterialReady: true,
+          timestamp: performance.now()
+        }
+      });
       
-      audioRef.current.play()
-        .then(() => {
-          setIsPlaying(true);
-          console.log('🎬 Auto-play successful for teaser mode');
-        })
-        .catch((error) => {
-          console.warn('🎬 Auto-play failed (likely needs user interaction):', error);
-          setIsPlaying(false);
-          hasAutoPlayedTeaser.current = false; // Reset flag so user can manually play
-        });
+      // Auto-play immediately in teaser mode (user clicked "Try Free Preview" = consent)
+      if (isTeaserMode && audioRef.current && !hasAutoPlayedTeaser.current) {
+        hasAutoPlayedTeaser.current = true;
+        console.log('🎬 Auto-playing teaser immediately - user clicked preview button (consent given)');
+        
+        // Force play the audio since user already interacted with the page
+        const playPromise = audioRef.current.play();
+        if (playPromise !== undefined) {
+          playPromise
+            .then(() => {
+              setIsPlaying(true);
+              console.log('🎬 ✅ Auto-play successful for teaser mode');
+              
+              // Send playback state message
+              sendAudioMessage({
+                type: 'playback-state',
+                timestamp: performance.now(),
+                data: {
+                  isPlaying: true,
+                  currentTime: audioRef.current?.currentTime || 0,
+                  duration: audioRef.current?.duration || 0
+                }
+              });
+            })
+            .catch((error) => {
+              console.warn('🎬 ⚠️ Auto-play failed - will require manual play:', error);
+              setIsPlaying(false);
+              hasAutoPlayedTeaser.current = false; // Reset flag so user can manually play
+            });
+        }
+      }
     }
-  }, [isTeaserMode, isPlaying, xrSceneReady]);
+  }, [isTeaserMode, xrSceneReady, sendAudioMessage]);
 
   // Handle seek requests from XR viewer
   const handleXRViewerSeek = useCallback((time: number) => {
@@ -495,10 +564,27 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
 
 
 
+  // Initialize XR scene early but keep hidden until needed
+  useEffect(() => {
+    if (tracks.length > 0 && tracks[currentTrack]?.isXR && !xrSceneInitialized) {
+      console.log('🎯 Initializing XR scene in background for seamless transition', {
+        trackTitle: tracks[currentTrack]?.title,
+        xrSrc: tracks[currentTrack]?.xrSrc
+      });
+      setXRSceneInitialized(true);
+    }
+  }, [tracks, currentTrack, xrSceneInitialized]);
+
   // Auto-start XR mode when in teaser mode
   useEffect(() => {
     if (isTeaserMode && tracks.length > 0 && !isXRLoading && !isXRMode) {
-      console.log('🎬 Auto-starting XR mode for teaser');
+      console.log('🎬 Auto-starting XR mode for teaser', {
+        tracks: tracks.length,
+        currentTrack,
+        trackTitle: tracks[currentTrack]?.title,
+        xrSrc: tracks[currentTrack]?.xrSrc
+      });
+      
       setIsXRLoading(true);
       setXRSceneReady(false); // Reset scene ready state
       setVideosphereMaterialReady(false); // Reset videosphere material ready state
@@ -506,6 +592,7 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
       
       // Activate XR mode immediately (removed artificial delay)
       setIsXRMode(true);
+      setXRSceneVisible(true); // Make XR scene visible
       
       // Send XR mode change message
       sendAudioMessage({
@@ -522,45 +609,63 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
         }
       });
       
-              // Fallback timeout to clear loading state if scene doesn't respond
-        setTimeout(() => {
-          if (isXRLoading) {
-            console.warn('🎬 Teaser XR scene loading timeout - clearing loading state');
-            setIsXRLoading(false);
+      console.log('🎬 XR mode change message sent - scene will auto-play when ready');
+      
+      // Fallback timeout to clear loading state if scene doesn't respond
+      setTimeout(() => {
+        if (isXRLoading && isTeaserMode) {
+          console.warn('🎬 Teaser XR scene loading timeout - forcing ready states and auto-play');
+          setIsXRLoading(false);
+          
+          // Force both ready states on timeout
+          setXRSceneReady(true);
+          setVideosphereMaterialReady(true);
+          
+          // Send ready message manually
+          sendAudioMessage({
+            type: 'xr-scene-fully-ready',
+            timestamp: performance.now(),
+            data: {
+              xrSceneReady: true,
+              videosphereMaterialReady: true,
+              timestamp: performance.now()
+            }
+          });
+          
+          // Auto-play on timeout in teaser mode (user clicked preview = consent)
+          if (audioRef.current && !hasAutoPlayedTeaser.current) {
+            hasAutoPlayedTeaser.current = true;
+            console.log('🎬 Auto-playing teaser after timeout - user consent already given');
             
-            // Force XR scene ready state on timeout
-            setXRSceneReady(true);
-            
-            // Note: Auto-play is now handled by videosphere material ready callback
-            // No immediate auto-play attempt here to prevent race conditions
-          }
-        }, 10000); // 10 second fallback
-        
-        // Additional safety timeout for videosphere material loading
-        setTimeout(() => {
-          if (isXRLoading || (!videosphereMaterialReady && xrSceneReady)) {
-            console.warn('🎬 Teaser videosphere material loading timeout - forcing material ready state');
-            setIsXRLoading(false);
-            setVideosphereMaterialReady(true);
-            
-            // Attempt auto-play after forcing material ready state
-            if (isTeaserMode && audioRef.current && !hasAutoPlayedTeaser.current && !isPlaying) {
-              hasAutoPlayedTeaser.current = true;
-              console.log('🎬 Attempting timeout auto-play for teaser mode');
-              
-              audioRef.current.play()
+            const playPromise = audioRef.current.play();
+            if (playPromise !== undefined) {
+              playPromise
                 .then(() => {
                   setIsPlaying(true);
-                  console.log('🎬 Timeout auto-play successful for teaser mode');
+                  console.log('🎬 ✅ Timeout auto-play successful for teaser mode');
+                  
+                  // Send playback state message
+                  sendAudioMessage({
+                    type: 'playback-state',
+                    timestamp: performance.now(),
+                    data: {
+                      isPlaying: true,
+                      currentTime: audioRef.current?.currentTime || 0,
+                      duration: audioRef.current?.duration || 0
+                    }
+                  });
                 })
                 .catch((error) => {
-                  console.warn('🎬 Timeout auto-play failed (needs user interaction):', error);
+                  console.warn('🎬 ⚠️ Timeout auto-play failed:', error);
                   setIsPlaying(false);
-                  hasAutoPlayedTeaser.current = false; // Reset flag for manual play
+                  hasAutoPlayedTeaser.current = false;
                 });
             }
           }
-        }, 15000); // 15 second fallback for videosphere material
+          
+          console.log('🎬 Forced XR scene ready state and attempted auto-play');
+        }
+      }, 6000); // Reduced to 6 seconds for faster recovery
     }
   }, [isTeaserMode, tracks.length, isXRLoading, isXRMode, sendAudioMessage, deviceOrientationPermission, currentTrack]);
 
@@ -574,48 +679,117 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
     }
   }, [isXRMode, xrSceneReady, tracks, currentTrack]);
 
-  // Mobile device and capability detection
+  // Enhanced mobile device and capability detection
   useEffect(() => {
     const detectDeviceCapabilities = () => {
-      // Mobile device detection
-      const isMobile = /Mobi|Android|iPhone|iPad|iPod|BlackBerry|Opera Mini/i.test(navigator.userAgent);
+      const userAgent = navigator.userAgent;
+      
+      // Enhanced mobile device detection with specific browser identification
+      const isMobile = /Mobi|Android|iPhone|iPad|iPod|BlackBerry|Opera Mini/i.test(userAgent);
+              const isIOSSafari = /iPad|iPhone|iPod/.test(userAgent) && !(window as any).MSStream;
+      const isAndroidChrome = /Android/.test(userAgent) && /Chrome/.test(userAgent);
+      const isAndroidFirefox = /Android/.test(userAgent) && /Firefox/.test(userAgent);
+      const isIOSChrome = /iPad|iPhone|iPod/.test(userAgent) && /CriOS/.test(userAgent);
+      const isIOSFirefox = /iPad|iPhone|iPod/.test(userAgent) && /FxiOS/.test(userAgent);
+      
       setIsMobileDevice(isMobile);
       
-      // Low-end device detection
+      // Enhanced low-end device detection
       const isLowEnd = (
         navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4
       ) || (
         'deviceMemory' in navigator && (navigator as any).deviceMemory <= 4
+      ) || (
+        // Additional heuristics for older devices
+        /Android [1-4]\./.test(userAgent) ||
+        /iPhone OS [1-9]_/.test(userAgent) ||
+        /iPad.*OS [1-9]_/.test(userAgent)
       );
       setIsLowEndDevice(!!isLowEnd);
       
-      // Network quality detection
+      // Enhanced network quality detection with more granular assessment
       if ('connection' in navigator) {
         const connection = (navigator as any).connection;
         if (connection) {
           const effectiveType = connection.effectiveType;
-          if (effectiveType === '4g' || effectiveType === '3g') {
+          const downlink = connection.downlink; // Mbps
+          const rtt = connection.rtt; // Round-trip time in ms
+          
+          // More sophisticated network quality assessment
+          if (effectiveType === '4g' && downlink > 10 && rtt < 100) {
             setNetworkQuality('fast');
-          } else if (effectiveType === '2g' || effectiveType === 'slow-2g') {
+          } else if (effectiveType === '4g' || effectiveType === '3g') {
+            setNetworkQuality(downlink < 2 ? 'slow' : 'fast');
+          } else {
             setNetworkQuality('slow');
           }
           
-          // Listen for network changes
-          connection.addEventListener('change', () => {
-            const newType = connection.effectiveType;
-            setNetworkQuality(
-              newType === '4g' || newType === '3g' ? 'fast' : 
-              newType === '2g' || newType === 'slow-2g' ? 'slow' : 'unknown'
-            );
-          });
+          // Listen for network changes with debouncing
+          let networkChangeTimeout: NodeJS.Timeout;
+          const handleNetworkChange = () => {
+            clearTimeout(networkChangeTimeout);
+            networkChangeTimeout = setTimeout(() => {
+              const newType = connection.effectiveType;
+              const newDownlink = connection.downlink;
+              
+              if (newType === '4g' && newDownlink > 10) {
+                setNetworkQuality('fast');
+              } else if (newType === '4g' || newType === '3g') {
+                setNetworkQuality(newDownlink < 2 ? 'slow' : 'fast');
+              } else {
+                setNetworkQuality('slow');
+              }
+            }, 1000); // Debounce network changes
+          };
+          
+          connection.addEventListener('change', handleNetworkChange);
         }
       }
       
-      console.log('📱 Device capabilities:', { 
+      // Apply browser-specific optimizations and touch handling
+      if (isMobile) {
+        // Prevent zoom on iOS Safari
+        if (isIOSSafari) {
+          const metaViewport = document.querySelector('meta[name="viewport"]');
+          if (metaViewport) {
+            metaViewport.setAttribute('content', 
+              'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover'
+            );
+          }
+          
+          // Disable iOS bounce scrolling globally
+          document.documentElement.style.setProperty('-webkit-overflow-scrolling', 'touch');
+          document.documentElement.style.setProperty('overscroll-behavior', 'none');
+        }
+        
+        // Android Chrome optimizations
+        if (isAndroidChrome) {
+          // Improve touch responsiveness
+          document.documentElement.style.setProperty('touch-action', 'manipulation');
+          
+          // Prevent address bar hiding issues
+          document.documentElement.style.setProperty('height', '100%');
+          document.body.style.setProperty('height', '100%');
+        }
+        
+        // General mobile optimizations
+        document.documentElement.style.setProperty('-webkit-tap-highlight-color', 'transparent');
+        document.documentElement.style.setProperty('-webkit-touch-callout', 'none');
+        document.documentElement.style.setProperty('-webkit-user-select', 'none');
+        document.documentElement.style.setProperty('user-select', 'none');
+      }
+      
+      console.log('📱 Enhanced device capabilities:', { 
         isMobile, 
         isLowEnd, 
+        isIOSSafari,
+        isAndroidChrome,
+        isAndroidFirefox,
+        isIOSChrome,
+        isIOSFirefox,
         hardwareConcurrency: navigator.hardwareConcurrency,
-        deviceMemory: (navigator as any).deviceMemory
+        deviceMemory: (navigator as any).deviceMemory,
+        userAgent: userAgent.substring(0, 50) + '...'
       });
     };
 
@@ -882,6 +1056,73 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
       }
     });
   }, [tourConfig, isTeaserMode]);
+
+  // Teaser preloading in background when requested
+  useEffect(() => {
+    if (!teaserPreloading || isTeaserMode) return; // Don't preload if already in teaser mode
+    
+    console.log('🎬 [PRELOAD] Starting teaser background preloading...');
+    
+    const preloadTeaser = async () => {
+      try {
+        // Get teaser tracks
+        const teaserTracks = convertChaptersToTracks(teaserTourConfig);
+        
+        if (teaserTracks.length > 0) {
+          const teaserTrack = teaserTracks[0]; // First teaser track
+          
+          console.log('🎬 [PRELOAD] Preloading teaser track:', teaserTrack.title);
+          
+          // Preload teaser images
+          await preloadTrackImages(teaserTrack);
+          
+          // Preload teaser audio
+          await preloadTrackAudio(teaserTrack);
+          
+          // Preload teaser XR scene if it has one
+          if (teaserTrack.isXR && teaserTrack.xrSrc) {
+            console.log('🎬 [PRELOAD] Preloading teaser XR scene...');
+            await preloadXRScene(teaserTrack.xrSrc);
+          }
+          
+          console.log('🎬 [PRELOAD] Teaser preloading completed');
+          
+          // Signal completion
+          if (onAudioMessage) {
+            sendAudioMessage({
+              type: 'xr-scene-fully-ready',
+              timestamp: performance.now(),
+              data: {
+                xrSceneReady: true,
+                videosphereMaterialReady: true,
+                timestamp: performance.now()
+              }
+            });
+          }
+        }
+      } catch (error) {
+        console.error('🎬 [PRELOAD] Failed to preload teaser:', error);
+        
+        // Signal completion anyway to prevent UI from being stuck
+        if (onAudioMessage) {
+          sendAudioMessage({
+            type: 'xr-scene-fully-ready',
+            timestamp: performance.now(),
+            data: {
+              xrSceneReady: false,
+              videosphereMaterialReady: false,
+              timestamp: performance.now()
+            }
+          });
+        }
+      }
+    };
+    
+         // Start preloading with a small delay to avoid blocking initial render
+     const preloadTimer = setTimeout(preloadTeaser, 200);
+     
+     return () => clearTimeout(preloadTimer);
+   }, [teaserPreloading, isTeaserMode, onAudioMessage, sendAudioMessage]);
 
   // Send init message when tracks are loaded and first track is ready
   useEffect(() => {
@@ -1615,6 +1856,7 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
         
         // Start XR mode but stay in loading state
         setIsXRMode(true);
+        setXRSceneVisible(true); // Make XR scene visible
         
         // Send XR mode change message
         sendAudioMessage({
@@ -1647,6 +1889,7 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
         
         // Activate XR mode immediately since everything is ready
         setIsXRMode(true);
+        setXRSceneVisible(true); // Make XR scene visible
         
         // Send XR mode change message with device orientation permission
         sendAudioMessage({
@@ -1675,6 +1918,7 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
     if (isTeaserMode) return;
     
     setIsXRMode(false);
+    setXRSceneVisible(false); // Hide XR scene but keep it initialized
     
     // Send XR mode change message
     sendAudioMessage({
@@ -2276,10 +2520,10 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
         </div>
       )}
       
-            {/* XR Scene - Always present for seamless toggling */}
+            {/* XR Scene - Always present when initialized for seamless toggling */}
       {xrSceneInitialized && track.isXR && (
         <div className={`fixed inset-0 ${Z_LAYERS.XR_BACKGROUND} transition-opacity duration-300 ${
-          isXRMode ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+          xrSceneVisible ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
         }`}>
           <XRScene 
             isPlaying={isPlaying}
