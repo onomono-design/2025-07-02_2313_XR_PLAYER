@@ -362,13 +362,12 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
   
   // Measurements
   const [containerDimensions, setContainerDimensions] = useState({ width: 0, height: 0 });
-  // @ts-ignore - Unused but kept for future reference
-  const [isImageHovered, setIsImageHovered] = useState(false);
   
   // Preloading state
   const [preloadedImages, setPreloadedImages] = useState<Set<string>>(new Set());
   const [preloadedXRScenes, setPreloadedXRScenes] = useState<Set<string>>(new Set());
   const [trackImagesPreloaded, setTrackImagesPreloaded] = useState<{[key: number]: boolean}>({});
+  const [audioPreloaded, setAudioPreloaded] = useState<{[key: string]: boolean}>({});
   const [imagesLoaded, setImagesLoaded] = useState<{[key: string]: boolean}>({});
   
   // Gesture handling state
@@ -736,6 +735,53 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
     }
   };
 
+  // Preload audio for a track
+  const preloadTrackAudio = async (track: Track): Promise<void> => {
+    if (!track.src || audioPreloaded[track.src]) return;
+    
+    console.log('🎵 Pre-loading audio for track:', track.title);
+    
+    try {
+      const audio = new Audio();
+      audio.preload = 'auto';
+      audio.src = track.src;
+      
+      // Listen for when enough data is loaded
+      const handleCanPlay = () => {
+        console.log('🎵 Audio pre-loaded successfully:', track.title);
+        setAudioPreloaded(prev => ({ ...prev, [track.src]: true }));
+        cleanup();
+      };
+      
+      const handleError = () => {
+        console.warn('🎵 Failed to preload audio:', track.title);
+        setAudioPreloaded(prev => ({ ...prev, [track.src]: true })); // Mark as loaded to prevent retries
+        cleanup();
+      };
+      
+      const cleanup = () => {
+        audio.removeEventListener('canplaythrough', handleCanPlay);
+        audio.removeEventListener('error', handleError);
+      };
+      
+      audio.addEventListener('canplaythrough', handleCanPlay);
+      audio.addEventListener('error', handleError);
+      
+      // Timeout cleanup after 15 seconds
+      setTimeout(() => {
+        if (!audioPreloaded[track.src]) {
+          console.warn('🎵 Audio pre-load timeout:', track.title);
+          setAudioPreloaded(prev => ({ ...prev, [track.src]: true }));
+          cleanup();
+        }
+      }, 15000);
+      
+    } catch (error) {
+      console.error('🎵 Failed to preload audio:', error);
+      setAudioPreloaded(prev => ({ ...prev, [track.src]: true }));
+    }
+  };
+
   // Preload A-frame scene for XR tracks
   const preloadXRScene = async (xrSrc: string): Promise<void> => {
     if (!xrSrc || xrScenesPreloaded[xrSrc]) return;
@@ -880,25 +926,60 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
     return () => clearInterval(interval);
   }, [isPlaying, currentTime, duration, sendAudioMessage, onAudioMessage]);
 
-  // Preload images when tracks change or current track changes
+  // Enhanced preloading for current, previous, and next tracks
   useEffect(() => {
     if (tracks.length === 0 || !tracks[currentTrack]) return;
     
     const currentTrackData = tracks[currentTrack];
+    
+    // Always preload current track immediately
     if (!trackImagesPreloaded[currentTrackData.id]) {
       preloadTrackImages(currentTrackData);
     }
     
-    // Don't preload next track in teaser mode (only one track)
-    if (!isTeaserMode) {
-      const nextTrackIndex = (currentTrack + 1) % tracks.length;
-      const nextTrackData = tracks[nextTrackIndex];
-      if (nextTrackData && !trackImagesPreloaded[nextTrackData.id]) {
-        setTimeout(() => {
-          preloadTrackImages(nextTrackData);
-        }, 500); // Small delay to prioritize current track
-      }
+    // Also preload current track audio
+    if (!audioPreloaded[currentTrackData.src]) {
+      preloadTrackAudio(currentTrackData);
     }
+    
+    // In teaser mode, only preload current track
+    if (isTeaserMode) return;
+    
+    // Preload adjacent tracks for smoother transitions
+    const preloadAdjacentTracks = () => {
+      const adjacentTracks = [];
+      
+      // Previous track
+      if (tracks.length > 1) {
+        const prevTrackIndex = (currentTrack - 1 + tracks.length) % tracks.length;
+        const prevTrackData = tracks[prevTrackIndex];
+        if (prevTrackData && !trackImagesPreloaded[prevTrackData.id]) {
+          adjacentTracks.push({ track: prevTrackData, delay: 1000 });
+        }
+      }
+      
+      // Next track
+      if (tracks.length > 1) {
+        const nextTrackIndex = (currentTrack + 1) % tracks.length;
+        const nextTrackData = tracks[nextTrackIndex];
+        if (nextTrackData && !trackImagesPreloaded[nextTrackData.id]) {
+          adjacentTracks.push({ track: nextTrackData, delay: 500 });
+        }
+      }
+      
+             // Load adjacent tracks with staggered delays
+       adjacentTracks.forEach(({ track, delay }) => {
+         setTimeout(() => {
+           preloadTrackImages(track);
+           // Also preload audio for adjacent tracks
+           if (!audioPreloaded[track.src]) {
+             preloadTrackAudio(track);
+           }
+         }, delay);
+       });
+    };
+    
+    preloadAdjacentTracks();
   }, [tracks, currentTrack, trackImagesPreloaded, imagesLoaded, isTeaserMode]);
 
   // Enhanced automatic thumbnail cycling with proper horizontal animation (disabled in teaser mode)
@@ -1187,36 +1268,70 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
     : track.cover;
 
   const togglePlay = () => {
-    if (!audioRef.current) return;
+    if (!audioRef.current) {
+      console.warn('🎵 Audio element not available');
+      return;
+    }
     
     const wasPlaying = isPlaying;
     
     if (isPlaying) {
       audioRef.current.pause();
-              console.log('🎵 Audio paused');
+      setIsPlaying(false);
+      console.log('🎵 Audio paused');
     } else {
-      audioRef.current.play();
-              console.log('🎵 Audio playing');
+      audioRef.current.play()
+        .then(() => {
+          setIsPlaying(true);
+          console.log('🎵 Audio playing');
+        })
+        .catch((error) => {
+          console.warn('🎵 Audio play failed:', error);
+          setIsPlaying(false);
+          return; // Exit early if play failed
+        });
     }
-    setIsPlaying(!isPlaying);
 
-    // Send playback state change message
-    sendAudioMessage({
-      type: 'playback-state',
-      timestamp: performance.now(),
-      data: {
-        isPlaying: !wasPlaying,
-        currentTime,
-        duration
-      }
-    });
+    // Send playback state change message (only for pause, play message sent after successful play)
+    if (wasPlaying) {
+      sendAudioMessage({
+        type: 'playback-state',
+        timestamp: performance.now(),
+        data: {
+          isPlaying: false,
+          currentTime,
+          duration
+        }
+      });
+    } else {
+      // Send play message only after successful play in the promise above
+      setTimeout(() => {
+        if (isPlaying) {
+          sendAudioMessage({
+            type: 'playback-state',
+            timestamp: performance.now(),
+            data: {
+              isPlaying: true,
+              currentTime,
+              duration
+            }
+          });
+        }
+      }, 100);
+    }
   };
 
   const selectTrack = (trackIndex: number) => {
-    // Disabled in teaser mode
-    if (isTeaserMode) return;
+    // Disabled in teaser mode or invalid track index
+    if (isTeaserMode || trackIndex < 0 || trackIndex >= tracks.length) return;
     
     const newTrack = tracks[trackIndex];
+    
+    // Safety check for valid track
+    if (!newTrack) {
+      console.warn('🎵 Selected track not found:', trackIndex);
+      return;
+    }
     
     setCurrentTrack(trackIndex);
     setCurrentTime(0);
@@ -1250,29 +1365,41 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
     
     if (audioRef.current) {
       setTimeout(() => {
-        audioRef.current?.play();
-        setIsPlaying(true);
-        
-        // Send playback state after auto-play
-        sendAudioMessage({
-          type: 'playback-state',
-          timestamp: performance.now(),
-          data: {
-            isPlaying: true,
-            currentTime: 0,
-            duration: newTrack.duration
-          }
-        });
+        audioRef.current?.play()
+          .then(() => {
+            setIsPlaying(true);
+            
+            // Send playback state after successful auto-play
+            sendAudioMessage({
+              type: 'playback-state',
+              timestamp: performance.now(),
+              data: {
+                isPlaying: true,
+                currentTime: 0,
+                duration: newTrack.duration
+              }
+            });
+          })
+          .catch((error) => {
+            console.warn('🎵 Auto-play failed after track selection:', error);
+            setIsPlaying(false);
+          });
       }, 100);
     }
   };
 
   const nextTrack = () => {
-    // Disabled in teaser mode
-    if (isTeaserMode) return;
+    // Disabled in teaser mode or if no tracks available
+    if (isTeaserMode || tracks.length === 0) return;
     
     const newTrackIndex = (currentTrack + 1) % tracks.length;
     const newTrack = tracks[newTrackIndex];
+    
+    // Safety check for valid track
+    if (!newTrack) {
+      console.warn('🎵 Next track not found, staying on current track');
+      return;
+    }
     
     setCurrentTrack(newTrackIndex);
     setCurrentTime(0);
@@ -1305,8 +1432,8 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
   };
 
   const previousTrack = () => {
-    // Disabled in teaser mode
-    if (isTeaserMode) return;
+    // Disabled in teaser mode or if no tracks available
+    if (isTeaserMode || tracks.length === 0) return;
     
     if (currentTime > 3) {
       const previousTime = currentTime;
@@ -1314,7 +1441,7 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
         audioRef.current.currentTime = 0;
       }
       setCurrentTime(0);
-      console.log('🎵 Track changed');
+      console.log('🎵 Track rewound to start');
       
       // Send seek message for rewind to start
       sendAudioMessage({
@@ -1328,6 +1455,12 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
     } else {
       const newTrackIndex = (currentTrack - 1 + tracks.length) % tracks.length;
       const newTrack = tracks[newTrackIndex];
+      
+      // Safety check for valid track
+      if (!newTrack) {
+        console.warn('🎵 Previous track not found, staying on current track');
+        return;
+      }
       
       setCurrentTrack(newTrackIndex);
       setCurrentTime(0);
@@ -2385,11 +2518,6 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
               <div className="text-center mb-5">
                 <h3 className="text-white text-xl font-semibold truncate mb-1">{track.title}</h3>
                 <p className="text-slate-300 text-base">{track.artist}</p>
-                {track.script && (
-                  <div className="mt-2 text-slate-400 text-sm line-clamp-2 max-w-md mx-auto">
-                    {track.script.slice(0, 100)}...
-                  </div>
-                )}
               </div>
             
             {/* Progress Bar */}

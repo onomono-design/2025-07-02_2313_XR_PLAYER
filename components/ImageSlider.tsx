@@ -89,8 +89,7 @@ export function ImageSlider({
   autoplay = true,
   defaultInterval = 20,
   onSlideChange,
-  // @ts-ignore - Kept for future use
-  devMode = false,
+  devMode = false, // Currently unused but kept for future development features
   allowVerticalCrop = false,
   aspectRatio = 1,
   enableFullscreen = true,
@@ -358,7 +357,7 @@ export function ImageSlider({
   const sliderContent = (
     <>
       {autoplay && timeRemaining !== null && !isFullscreen && !isTeaserMode && (
-        <div className="absolute top-2 right-2 md:top-4 md:right-4 z-20 bg-black/60 text-white text-xs px-2 py-1 rounded-full">
+        <div className="absolute top-3 right-3 md:top-4 md:right-4 z-20 bg-black/60 text-white text-xs px-2 py-1 rounded-full">
           {timeRemaining}s
         </div>
       )}
@@ -440,7 +439,7 @@ export function ImageSlider({
           <button
             aria-label="Previous slide"
             className={cn(
-              "absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 md:w-10 md:h-10 rounded-full bg-black/50 flex items-center justify-center text-white z-10",
+              "absolute left-3 top-1/2 -translate-y-1/2 w-8 h-8 md:w-10 md:h-10 rounded-full bg-black/50 flex items-center justify-center text-white z-10",
               "transition-opacity duration-300 ease-in-out",
               isHovering || isDragging || isFullscreen ? "opacity-100" : "opacity-0",
             )}
@@ -451,7 +450,7 @@ export function ImageSlider({
           <button
             aria-label="Next slide"
             className={cn(
-              "absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 md:w-10 md:h-10 rounded-full bg-black/50 flex items-center justify-center text-white z-10",
+              "absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 md:w-10 md:h-10 rounded-full bg-black/50 flex items-center justify-center text-white z-10",
               "transition-opacity duration-300 ease-in-out",
               isHovering || isDragging || isFullscreen ? "opacity-100" : "opacity-0",
             )}
@@ -547,6 +546,7 @@ export function ImageSlider({
 
   const containerClass = cn(
     "relative w-full overflow-hidden rounded-xl shadow-lg",
+    "mx-2 my-3 md:mx-3 md:my-4", // Added responsive margin and padding
     allowVerticalCrop ? "h-full" : "aspect-square",
     className,
   )

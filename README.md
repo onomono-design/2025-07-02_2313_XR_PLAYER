@@ -2,7 +2,28 @@
 
 A comprehensive mobile-first audio walking tour application built with React, TypeScript, Tailwind CSS, and integrated 360° XR experiences. Features immersive XR experiences, robust image galleries, enhanced audio controls, and comprehensive audio synchronization with A-Frame 360° viewer integration.
 
-## 🆕 Latest Updates (v2.0)
+## 🆕 Latest Updates (v2.1) - January 2025
+
+### Smart Preloading & Performance ⚡
+- **Enhanced Smart Preloading**: Now preloads XR, audio, and photo content for previous AND next tracks for seamless navigation
+- **Advanced Audio Preloading**: Background audio preloading for adjacent tracks to eliminate loading delays
+- **Improved Landing Page**: Device orientation permission request no longer dismisses the landing page until user responds
+- **Background Content Loading**: All media content preloads simultaneously during permission requests
+
+### UI/UX Refinements & Stability ✨
+- **Streamlined Audio Controller**: Removed description box above progress scrubber for cleaner interface
+- **Enhanced Error Handling**: Better safety checks and bounds validation for track navigation
+- **Improved Audio Playback**: Enhanced error handling with promise-based play/pause controls
+- **Code Quality**: Cleaned up unused code, removed @ts-ignore comments, improved TypeScript safety
+- **Edge Case Handling**: Added comprehensive validation for track selection and navigation
+
+### Visual & Interaction Improvements
+- **Image Slider Spacing**: Added proper margin and padding to image slider component for better visual balance
+- **Better Loading States**: Enhanced loading state indicators with improved error recovery
+- **Navigation Safety**: Added bounds checking and null safety for all track navigation functions
+- **Mobile Stability**: Improved stability for extended mobile sessions with better memory management
+
+## 🆕 Previous Updates (v2.0)
 
 ### Mobile UX Revolution ✨
 - **Haptic Feedback**: Added subtle vibrations for all touch interactions on mobile devices
@@ -14,7 +35,7 @@ A comprehensive mobile-first audio walking tour application built with React, Ty
 
 ### Performance Improvements
 - **Battery Optimization**: Reduced initialization attempts and smarter timeouts on mobile
-- **Image Preloading**: Smart preloading of next images for seamless transitions
+- **Advanced Preloading**: Smart preloading of images, audio, and XR content for current, previous, and next tracks
 - **Hardware Acceleration**: GPU-optimized rendering for 60fps animations
 - **Memory Management**: Better resource cleanup for extended mobile sessions
 

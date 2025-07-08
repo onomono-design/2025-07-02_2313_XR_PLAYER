@@ -240,21 +240,28 @@ export default function App() {
     }
   };
 
-  // Enhanced handleGetStarted with proper permission flow
+  // Enhanced handleGetStarted with proper permission flow and background preloading
   const handleGetStarted = useCallback(
     async (isTeaserRequest: boolean = false) => {
       const modeConfig = isTeaserRequest ? TOUR_MODE_CONFIG.TEASER : TOUR_MODE_CONFIG.FULL;
       console.log(`🚀 Starting ${modeConfig.displayName}:`, modeConfig.description);
       
       setIsTeaserMode(isTeaserRequest);
-      setShowLandingPage(false);
       
-      // Request device orientation permission immediately
+      // Start background preloading immediately while permission is being requested
+      console.log('🎯 Starting background preloading for all content...');
+      // The AudioPlayer will automatically start preloading once it's rendered
+      
+      // Request device orientation permission - keep landing page visible during this process
       console.log('🎯 Requesting device orientation permission for XR experience...');
       const permissionResult = await requestDeviceOrientationPermission();
       
       console.log('🎯 Permission result:', permissionResult);
       setDeviceOrientationPermission(permissionResult);
+      
+      // Only hide landing page after permission is granted/denied
+      console.log('🎯 Hiding landing page after permission handled');
+      setShowLandingPage(false);
       
       // Log mode-specific features and limitations
       console.log(`📋 ${modeConfig.displayName} Features:`, modeConfig.features);
