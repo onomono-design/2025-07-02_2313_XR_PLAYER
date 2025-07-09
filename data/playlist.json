@@ -1,0 +1,257 @@
+{
+  "locations": {
+    "DTLA-PLAZA": {
+      "name": "Downtown LA Plaza",
+      "description": "Explore the historic heart of Downtown Los Angeles",
+      "teasers": {
+        "teaser_1": {
+          "title": "DTLA Plaza - Historic Overview",
+          "description": "Discover the architectural heritage of Downtown LA's central plaza",
+          "duration": 60,
+          "audio_src": "",
+          "video_src": "",
+          "thumbnails": [],
+          "available": false
+        },
+        "teaser_2": {
+          "title": "DTLA Plaza - Cultural Heritage",
+          "description": "Experience the cultural diversity of the plaza area",
+          "duration": 60,
+          "audio_src": "",
+          "video_src": "",
+          "thumbnails": [],
+          "available": false
+        },
+        "teaser_3": {
+          "title": "DTLA Plaza - Modern Evolution",
+          "description": "See how the plaza has evolved in the modern era",
+          "duration": 60,
+          "audio_src": "",
+          "video_src": "",
+          "thumbnails": [],
+          "available": false
+        },
+        "teaser_4": {
+          "title": "DTLA Plaza - Future Vision",
+          "description": "Learn about future development plans for the plaza",
+          "duration": 60,
+          "audio_src": "",
+          "video_src": "",
+          "thumbnails": [],
+          "available": false
+        }
+      },
+      "full_tour": {
+        "available": false,
+        "chapters": []
+      }
+    },
+    "SF-CHINATOWN": {
+      "name": "San Francisco Chinatown",
+      "description": "Journey through America's oldest Chinatown",
+      "teasers": {
+        "teaser_1": {
+          "title": "SF Chinatown - Welcome",
+          "description": "Welcome to San Francisco's historic Chinatown district",
+          "duration": 59,
+          "audio_src": "https://cmm-cloud-2.s3.us-west-1.amazonaws.com/WALKING+TOURS/2025-03-15-CHINATOWN/2025-03-15-CHINATOWN-MP3S/2025-03-14-CHINATOWN-003-COMPRESSED.mp3",
+          "video_src": "https://cmm-cloud-2.s3.us-west-1.amazonaws.com/2025-06-06_HLS-CHUNKING-TEST/master.m3u8",
+          "thumbnails": [
+            {
+              "url": "https://images.unsplash.com/photo-1449824913935-59a10b8d2000?w=400&h=400&fit=crop&crop=center",
+              "title": "Historic Chinatown Gateway",
+              "description": "The iconic Dragon Gate entrance to San Francisco's Chinatown, built in 1970 as a symbol of friendship between the sister cities."
+            },
+            {
+              "url": "https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?w=400&h=400&fit=crop&crop=center",
+              "title": "Traditional Architecture",
+              "description": "Victorian buildings adapted with Chinese architectural elements, showcasing the unique cultural blend of the neighborhood."
+            },
+            {
+              "url": "https://images.unsplash.com/photo-1486325212027-8081e485255e?w=400&h=400&fit=crop&crop=center",
+              "title": "Grant Avenue",
+              "description": "The bustling main thoroughfare of Chinatown, lined with shops, restaurants, and cultural landmarks dating back to the 1800s."
+            }
+          ],
+          "available": true
+        },
+        "teaser_2": {
+          "title": "SF Chinatown - Cultural Heritage",
+          "description": "Discover the rich cultural traditions of Chinatown",
+          "duration": 60,
+          "audio_src": "",
+          "video_src": "",
+          "thumbnails": [],
+          "available": false
+        },
+        "teaser_3": {
+          "title": "SF Chinatown - Hidden Gems",
+          "description": "Explore the lesser-known corners of Chinatown",
+          "duration": 60,
+          "audio_src": "",
+          "video_src": "",
+          "thumbnails": [],
+          "available": false
+        },
+        "teaser_4": {
+          "title": "SF Chinatown - Modern Life",
+          "description": "Experience contemporary life in historic Chinatown",
+          "duration": 60,
+          "audio_src": "",
+          "video_src": "",
+          "thumbnails": [],
+          "available": false
+        }
+      },
+      "full_tour": {
+        "available": true,
+        "chapters": [
+          {
+            "chapter_id": "ch1",
+            "title": "Welcome to Chinatown",
+            "description": "Begin your journey through San Francisco's historic Chinatown",
+            "audio_src": "https://cmm-cloud-2.s3.us-west-1.amazonaws.com/WALKING+TOURS/2025-03-15-CHINATOWN/2025-03-15-CHINATOWN-MP3S/2025-03-14-CHINATOWN-003-COMPRESSED.mp3",
+            "video_src": "https://cmm-cloud-2.s3.us-west-1.amazonaws.com/2025-06-06_HLS-CHUNKING-TEST/master.m3u8",
+            "thumbnails": [
+              {
+                "url": "https://images.unsplash.com/photo-1449824913935-59a10b8d2000?w=400&h=400&fit=crop&crop=center",
+                "title": "Historic Chinatown Gateway",
+                "description": "The iconic Dragon Gate entrance to San Francisco's Chinatown, built in 1970 as a symbol of friendship between the sister cities."
+              },
+              {
+                "url": "https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?w=400&h=400&fit=crop&crop=center",
+                "title": "Traditional Architecture",
+                "description": "Victorian buildings adapted with Chinese architectural elements, showcasing the unique cultural blend of the neighborhood."
+              },
+              {
+                "url": "https://images.unsplash.com/photo-1486325212027-8081e485255e?w=400&h=400&fit=crop&crop=center",
+                "title": "Grant Avenue",
+                "description": "The bustling main thoroughfare of Chinatown, lined with shops, restaurants, and cultural landmarks dating back to the 1800s."
+              }
+            ],
+            "available": true
+          },
+          {
+            "chapter_id": "ch2",
+            "title": "Cultural Traditions",
+            "description": "Explore the deep cultural traditions of the community",
+            "audio_src": "",
+            "video_src": "",
+            "thumbnails": [],
+            "available": false
+          },
+          {
+            "chapter_id": "ch3",
+            "title": "Commercial Heritage",
+            "description": "Discover the historic shops and businesses",
+            "audio_src": "",
+            "video_src": "",
+            "thumbnails": [],
+            "available": false
+          }
+        ]
+      }
+    },
+    "SF-JAPANTOWN": {
+      "name": "San Francisco Japantown",
+      "description": "Experience the cultural heart of San Francisco's Japanese community",
+      "teasers": {
+        "teaser_1": {
+          "title": "SF Japantown - Peace Plaza",
+          "description": "Explore the iconic Peace Plaza and its significance",
+          "duration": 60,
+          "audio_src": "",
+          "video_src": "",
+          "thumbnails": [],
+          "available": false
+        },
+        "teaser_2": {
+          "title": "SF Japantown - Cultural Center",
+          "description": "Visit the Japan Center and its cultural offerings",
+          "duration": 60,
+          "audio_src": "",
+          "video_src": "",
+          "thumbnails": [],
+          "available": false
+        },
+        "teaser_3": {
+          "title": "SF Japantown - Traditional Arts",
+          "description": "Discover traditional Japanese arts and crafts",
+          "duration": 60,
+          "audio_src": "",
+          "video_src": "",
+          "thumbnails": [],
+          "available": false
+        },
+        "teaser_4": {
+          "title": "SF Japantown - Modern Community",
+          "description": "Learn about the modern Japanese-American community",
+          "duration": 60,
+          "audio_src": "",
+          "video_src": "",
+          "thumbnails": [],
+          "available": false
+        }
+      },
+      "full_tour": {
+        "available": false,
+        "chapters": []
+      }
+    },
+    "SF-MISSION": {
+      "name": "San Francisco Mission District",
+      "description": "Discover the vibrant culture and history of the Mission District",
+      "teasers": {
+        "teaser_1": {
+          "title": "SF Mission - Mural Arts",
+          "description": "Explore the world-famous murals of the Mission District",
+          "duration": 60,
+          "audio_src": "",
+          "video_src": "",
+          "thumbnails": [],
+          "available": false
+        },
+        "teaser_2": {
+          "title": "SF Mission - Latin Culture",
+          "description": "Experience the rich Latin American culture of the district",
+          "duration": 60,
+          "audio_src": "",
+          "video_src": "",
+          "thumbnails": [],
+          "available": false
+        },
+        "teaser_3": {
+          "title": "SF Mission - Historic Mission",
+          "description": "Visit the historic Mission San Francisco de Asís",
+          "duration": 60,
+          "audio_src": "",
+          "video_src": "",
+          "thumbnails": [],
+          "available": false
+        },
+        "teaser_4": {
+          "title": "SF Mission - Modern District",
+          "description": "See how the Mission District has evolved in recent decades",
+          "duration": 60,
+          "audio_src": "",
+          "video_src": "",
+          "thumbnails": [],
+          "available": false
+        }
+      },
+      "full_tour": {
+        "available": false,
+        "chapters": []
+      }
+    }
+  },
+  "metadata": {
+    "version": "1.0",
+    "last_updated": "2025-01-07",
+    "supported_formats": {
+      "audio": ["mp3", "wav", "m4a"],
+      "video": ["mp4", "m3u8", "webm"],
+      "images": ["jpg", "jpeg", "png", "webp"]
+    }
+  }
+} 

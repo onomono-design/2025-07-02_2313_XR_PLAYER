@@ -138,7 +138,7 @@ export function XRScene({
     
     // Mobile-optimized initial delay
     const initialDelay = isMobile ? 800 : 500;
-    initializationTimeoutRef.current = setTimeout(attemptInitialization, initialDelay);
+    initializationTimeoutRef.current = setTimeout(attemptInitialization, initialDelay) as unknown as number;
 
     return () => {
       if (initializationTimeoutRef.current) {

@@ -138,7 +138,7 @@
             embedded
             vr-mode-ui="enabled: false"
             device-orientation-permission-ui="enabled: true"
-            renderer="colorManagement: false; gammaOutput: false; antialias: true"
+            renderer="colorManagement: true; outputColorSpace: srgb; antialias: true"
             background="color: #000000">
             
             <a-assets>
@@ -146,67 +146,103 @@
                     id="video-asset"
                     crossorigin="anonymous"
                     playsinline
-                    preload="auto"
-                    muted>
+                    preload="metadata"
+                    muted
+                    webkit-playsinline="true">
                 </video>
             </a-assets>
             
             <a-videosphere
                 id="videosphere"
                 src="#video-asset"
-                rotation="0 0 0"
+                rotation="0 90 0"
+                scale="1 1 1"
+                geometry="phiStart: 0; phiLength: 360; thetaStart: 0; thetaLength: 180"
                 mobile-video-fix>
             </a-videosphere>
             
             <a-camera
                 id="camera"
-                look-controls="enabled: true; pointerLockEnabled: false; magicWindowTrackingEnabled: true; reverseMouseDrag: true; reverseTouchDrag: true"
+                look-controls="enabled: true; pointerLockEnabled: false; magicWindowTrackingEnabled: true; reverseMouseDrag: false; reverseTouchDrag: true"
                 wasd-controls="enabled: false"
                 position="0 0 0"
+                rotation="0 -90 0"
                 fov="75">
             </a-camera>
         </a-scene>
     </div>
 
     <script>
-        // Simple mobile color correction component
+        // Enhanced cross-platform color correction component
         AFRAME.registerComponent('mobile-video-fix', {
             init: function() {
-                console.log('🎯 Initializing mobile video fix');
+                console.log('🎯 Initializing cross-platform video color fix');
                 
                 const videoEl = document.querySelector('#video-asset');
                 const videosphere = this.el;
                 
                 if (videoEl && videosphere) {
-                    // Wait for video to load
-                    videoEl.addEventListener('loadeddata', () => {
-                        console.log('🎯 Applying mobile video fix');
+                    // Apply fix when video loads or when mesh is ready
+                    const applyColorFix = () => {
+                        console.log('🎯 Applying cross-platform color fix');
                         
                         // Get the mesh and material
                         const mesh = videosphere.getObject3D('mesh');
                         if (mesh && mesh.material) {
-                            // Check if we're on a mobile device with color issues
-                            const isMobile = /Mobi|Android/i.test(navigator.userAgent);
+                            console.log('🎯 Video mesh found, applying consistent color profile');
                             
-                            if (isMobile) {
-                                console.log('🎯 Mobile device detected - applying color fix');
-                                
-                                // Create a new video texture without color space conversion
-                                const texture = new THREE.VideoTexture(videoEl);
-                                texture.minFilter = THREE.LinearFilter;
-                                texture.magFilter = THREE.LinearFilter;
-                                texture.format = THREE.RGBFormat;
-                                texture.generateMipmaps = false;
-                                texture.flipY = false;
-                                
-                                // Apply directly to material without color space conversion
-                                mesh.material.map = texture;
-                                mesh.material.needsUpdate = true;
-                                
-                                console.log('🎯 Mobile video fix applied');
+                            // Create a properly configured video texture
+                            const texture = new THREE.VideoTexture(videoEl);
+                            
+                            // Ensure consistent color space handling across all devices
+                            texture.colorSpace = THREE.SRGBColorSpace;
+                            texture.minFilter = THREE.LinearFilter;
+                            texture.magFilter = THREE.LinearFilter;
+                            texture.format = THREE.RGBAFormat;
+                            texture.generateMipmaps = false;
+                            texture.flipY = false;
+                            texture.needsUpdate = true;
+                            
+                            // Fix texture mapping for proper 360° orientation
+                            texture.wrapS = THREE.RepeatWrapping;
+                            texture.wrapT = THREE.RepeatWrapping;
+                            // Flip the texture horizontally and vertically for proper 360° viewing from inside
+                            texture.repeat.set(-1, -1);
+                            texture.offset.set(1, 1);
+                            
+                            // Apply to material with consistent settings
+                            mesh.material.map = texture;
+                            mesh.material.needsUpdate = true;
+                            
+                            // Ensure material uses sRGB color space
+                            if (mesh.material.color) {
+                                mesh.material.color.convertSRGBToLinear();
                             }
+                            
+                            console.log('🎯 Cross-platform color fix and orientation correction applied successfully');
+                            
+                            // Debug sphere orientation
+                            console.log('🎯 Videosphere configuration:', {
+                                scale: videosphere.getAttribute('scale'),
+                                rotation: videosphere.getAttribute('rotation'),
+                                geometry: videosphere.getAttribute('geometry')
+                            });
+                        } else {
+                            console.warn('🎯 Video mesh not found, retrying in 100ms');
+                            setTimeout(applyColorFix, 100);
                         }
-                    });
+                    };
+                    
+                    // Apply when video data is loaded
+                    videoEl.addEventListener('loadeddata', applyColorFix);
+                    
+                    // Also try immediately if video is already loaded
+                    if (videoEl.readyState >= 2) {
+                        setTimeout(applyColorFix, 50);
+                    }
+                    
+                    // Apply when A-Frame mesh is ready
+                    videosphere.addEventListener('materialtextureloaded', applyColorFix);
                 }
             }
         });
@@ -263,17 +299,48 @@
             init() {
                 console.log('🎯 Initializing headless 360° viewer');
                 
+                // Detect mobile device early for optimizations
+                const isMobile = /Mobi|Android|iPhone|iPad|iPod|BlackBerry|Opera Mini/i.test(navigator.userAgent);
+                const isLowEndDevice = navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4;
+                
+                console.log('📱 Device detection:', { isMobile, isLowEndDevice, cores: navigator.hardwareConcurrency });
+                
                 // Get URL parameters
                 const params = new URLSearchParams(window.location.search);
                 this.videoUrl = params.get('video') || '';
                 this.parentOrigin = params.get('origin') || '*';
                 this.autoStart = params.get('autoStart') === 'true';
                 
-                // Initialize A-Frame scene
+                // Initialize A-Frame scene with mobile optimizations
                 this.scene = document.querySelector('#scene');
                 this.camera = document.querySelector('#camera');
                 this.videosphere = document.querySelector('#videosphere');
                 this.video = document.querySelector('#video-asset');
+                
+                // Apply mobile-specific video optimizations
+                if (isMobile) {
+                    console.log('📱 Applying mobile video optimizations');
+                    if (this.video) {
+                        // Additional mobile attributes for better compatibility
+                        this.video.setAttribute('muted', 'true');
+                        this.video.setAttribute('autoplay', 'false'); // Prevent auto-download
+                        this.video.setAttribute('controls', 'false');
+                        
+                        // iOS-specific optimizations
+                        if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+                            this.video.setAttribute('webkit-playsinline', 'true');
+                            this.video.setAttribute('x-webkit-airplay', 'allow');
+                        }
+                    }
+                    
+                    // Lower A-Frame renderer quality for mobile
+                    if (this.scene) {
+                        this.scene.setAttribute('renderer', 'antialias: false; colorManagement: true; outputColorSpace: srgb; physicallyCorrectLights: false');
+                        
+                        // Reduce shadow quality on mobile
+                        this.scene.setAttribute('shadow', 'type: basic');
+                    }
+                }
                 
                 this.setupEventListeners();
                 this.setupMessageHandling();
@@ -284,21 +351,28 @@
                 // DON'T automatically request device orientation permission - wait for main app
                 // this.requestDeviceOrientationPermission(); // REMOVED
                 
-                // Auto-preload if specified
+                // Auto-preload if specified (with mobile consideration)
                 if (this.autoStart && this.videoUrl) {
-                    this.loadVideo(this.videoUrl);
+                    // Delay video loading slightly on mobile to allow scene setup
+                    const loadDelay = isMobile ? 200 : 0;
+                    setTimeout(() => {
+                        this.loadVideo(this.videoUrl);
+                    }, loadDelay);
                 }
                 
-                // Send ready message after initialization
+                // Send ready message after initialization (faster on mobile)
+                const readyDelay = isMobile ? 50 : 100;
                 setTimeout(() => {
                     this.sendMessage('ready', {
                         mode: 'headless',
                         autoStart: this.autoStart,
                         orientationPermission: this.orientationPermission,
                         devicePerformance: this.devicePerformance,
-                        networkQuality: this.networkQuality
+                        networkQuality: this.networkQuality,
+                        isMobile: isMobile,
+                        isLowEndDevice: isLowEndDevice
                     });
-                }, 100);
+                }, readyDelay);
                 
                 // Expose debug method to parent window
                 if (window.parent && window.parent !== window) {
@@ -445,6 +519,9 @@
                             break;
                         case 'toggleMute':
                             this.toggleMute();
+                            break;
+                        case 'set-inverse-controls':
+                            this.setInverseControls(data);
                             break;
                         case 'setFov':
                             this.setFov(data.value);
@@ -676,29 +753,50 @@
                 }
             }
             
+            setInverseControls(options) {
+                if (this.camera) {
+                    const lookControls = this.camera.getAttribute('look-controls');
+                    const newControls = {
+                        ...lookControls,
+                        reverseMouseDrag: options.inverseX || false,
+                        // Always reverse touch drag for mobile devices to match expected behavior
+                        reverseTouchDrag: true
+                    };
+                    
+                    this.camera.setAttribute('look-controls', newControls);
+                    console.log('🎯 Inverse controls set:', newControls);
+                    
+                    this.sendMessage('commandresponse', {
+                        command: 'set-inverse-controls',
+                        success: true,
+                        inverseX: options.inverseX
+                    });
+                }
+            }
+            
             recenter() {
-                console.log('🎯 Recenter called - resetting camera rotation');
+                console.log('🎯 Recenter called - resetting camera rotation with -90° offset');
                 
                 if (this.camera) {
-                    // Reset camera rotation
-                    this.camera.setAttribute('rotation', '0 0 0');
+                    // Reset camera rotation to -90° offset (90° counter-clockwise from default)
+                    this.camera.setAttribute('rotation', '0 -90 0');
                     
                     // Also reset any accumulated rotation from look controls
                     const lookControls = this.camera.components['look-controls'];
                     if (lookControls) {
                         lookControls.pitchObject.rotation.x = 0;
                         lookControls.yawObject.rotation.y = 0;
-                        console.log('🎯 Reset look controls rotation');
+                        console.log('🎯 Reset look controls rotation with -90° offset');
                     }
                     
                     // Send success message back to parent
                     this.sendMessage('recenter', { 
                         success: true, 
                         timestamp: performance.now(),
-                        rotation: { x: 0, y: 0, z: 0 }
+                        rotation: { x: 0, y: -90, z: 0 }
                     });
                     
-                    console.log('🎯 Camera recentered successfully');
+                    console.log('🎯 Camera recentered successfully with -90° offset');
                 } else {
                     console.error('🎯 Cannot recenter - camera not found');
                     this.sendMessage('recenter', { 
@@ -935,14 +1033,20 @@
             loadDirectVideo(url, clearLoadingTimeout) {
                 console.log('🎯 Loading direct video:', url);
                 
+                // Enhanced mobile detection for adaptive loading
+                const isMobile = /Mobi|Android|iPhone|iPad|iPod|BlackBerry|Opera Mini/i.test(navigator.userAgent);
+                const isSlowConnection = this.networkQuality === 'low' || this.networkQuality === 'medium';
+                
                 // Reset any previous error handlers
                 this.video.onerror = null;
                 this.video.onloadedmetadata = null;
                 this.video.oncanplaythrough = null;
                 this.video.onstalled = null;
                 this.video.onsuspend = null;
+                this.video.onprogress = null;
+                this.video.onwaiting = null;
                 
-                // Add comprehensive error handling
+                // Enhanced error handling with recovery strategies
                 this.video.onerror = (error) => {
                     console.error('🎯 Direct video loading error:', error);
                     clearLoadingTimeout();
@@ -950,19 +1054,44 @@
                     const errorCode = this.video.error ? this.video.error.code : 'unknown';
                     const errorMessage = this.video.error ? this.video.error.message : 'Video load failed';
                     
-                    this.showError('Failed to load video file', { 
-                        url, 
-                        errorCode, 
-                        errorMessage,
-                        networkState: this.video.networkState,
-                        readyState: this.video.readyState
-                    });
+                    // Try different recovery strategies based on error type
+                    if (this.video.error && this.video.error.code === MediaError.MEDIA_ERR_NETWORK) {
+                        console.log('🎯 Network error detected - will retry with different strategy');
+                        this.sendMessage('error', {
+                            error: 'Network error loading video - retrying...',
+                            details: { url, errorCode, errorMessage, retryable: true },
+                            recoverable: true
+                        });
+                    } else if (this.video.error && this.video.error.code === MediaError.MEDIA_ERR_DECODE) {
+                        console.log('🎯 Decode error detected - video format may not be supported');
+                        this.sendMessage('error', {
+                            error: 'Video format not supported on this device',
+                            details: { url, errorCode, errorMessage, retryable: false },
+                            recoverable: false
+                        });
+                    } else {
+                        this.showError('Failed to load video file', { 
+                            url, 
+                            errorCode, 
+                            errorMessage,
+                            networkState: this.video.networkState,
+                            readyState: this.video.readyState
+                        });
+                    }
                 };
                 
-                // Handle successful metadata load
+                // Handle successful metadata load with enhanced feedback
                 this.video.onloadedmetadata = () => {
                     console.log('🎯 Direct video metadata loaded');
                     clearLoadingTimeout();
+                    
+                    // Send metadata loaded message
+                    this.sendMessage('loadedmetadata', {
+                        duration: this.video.duration,
+                        videoWidth: this.video.videoWidth,
+                        videoHeight: this.video.videoHeight,
+                        readyState: this.video.readyState
+                    });
                     
                     // Ensure videosphere is updated with new source
                     if (this.videosphere) {
@@ -973,32 +1102,94 @@
                     this.hideLoading();
                 };
                 
-                // Handle network stalls
+                // Enhanced network monitoring
                 this.video.onstalled = () => {
-                    console.warn('🎯 Video loading stalled');
+                    console.warn('🎯 Video loading stalled - network may be slow');
+                    this.sendMessage('buffering', { 
+                        isBuffering: true, 
+                        reason: 'stalled',
+                        networkState: this.video.networkState 
+                    });
                 };
                 
-                // Handle network suspend
                 this.video.onsuspend = () => {
-                    console.warn('🎯 Video loading suspended');
+                    console.warn('🎯 Video loading suspended by browser');
+                    this.sendMessage('buffering', { 
+                        isBuffering: true, 
+                        reason: 'suspended',
+                        networkState: this.video.networkState 
+                    });
+                };
+                
+                // Progress monitoring for mobile devices
+                this.video.onprogress = () => {
+                    if (isMobile && this.video.buffered.length > 0) {
+                        const buffered = this.video.buffered.end(this.video.buffered.length - 1);
+                        const duration = this.video.duration || 1;
+                        const percentage = Math.round((buffered / duration) * 100);
+                        
+                        if (percentage % 10 === 0) { // Log every 10% on mobile
+                            console.log(`📱 Video buffered: ${percentage}% (${buffered.toFixed(1)}s / ${duration.toFixed(1)}s)`);
+                        }
+                    }
+                };
+                
+                // Handle waiting state (buffering)
+                this.video.onwaiting = () => {
+                    console.log('🎯 Video waiting for data');
+                    this.sendMessage('buffering', { 
+                        isBuffering: true, 
+                        reason: 'waiting',
+                        currentTime: this.video.currentTime 
+                    });
                 };
                 
                 // Handle when enough data is available to play
                 this.video.oncanplaythrough = () => {
                     console.log('🎯 Video can play through');
+                    this.sendMessage('canplaythrough', {
+                        readyState: this.video.readyState,
+                        networkState: this.video.networkState
+                    });
                     this.hideLoading();
                 };
                 
-                // Set source and start loading
-                this.video.src = url;
-                this.video.load();
+                // Adaptive loading strategy based on device and connection
+                if (isMobile && isSlowConnection) {
+                    console.log('📱 Mobile + slow connection detected - using conservative loading');
+                    this.video.preload = 'metadata';
+                } else {
+                    this.video.preload = 'auto';
+                }
                 
-                // Add a backup timeout specific to metadata loading
+                // Set source and start loading with enhanced error recovery
+                try {
+                    this.video.src = url;
+                    this.video.load();
+                    
+                    console.log(`🎯 Started loading video: ${url} (Mobile: ${isMobile}, Slow: ${isSlowConnection})`);
+                } catch (loadError) {
+                    console.error('🎯 Error setting video source:', loadError);
+                    clearLoadingTimeout();
+                    this.showError('Failed to set video source', { 
+                        url, 
+                        error: loadError.message 
+                    });
+                    return;
+                }
+                
+                // Enhanced backup timeout with retry logic
                 setTimeout(() => {
                     if (!this.isVideoReady && this.video.readyState < 1) {
                         console.warn('🎯 Video metadata still not loaded after 10 seconds');
-                        // Try to force reload
-                        this.video.load();
+                        
+                        // Force a reload attempt
+                        console.log('🎯 Attempting forced video reload');
+                                                 try {
+                             this.video.load();
+                         } catch (reloadError) {
+                             console.error('🎯 Forced reload failed:', reloadError);
+                         }
                     }
                 }, 10000);
             }

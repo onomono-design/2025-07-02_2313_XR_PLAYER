@@ -2,7 +2,29 @@
 
 A comprehensive mobile-first audio walking tour application built with React, TypeScript, Tailwind CSS, and integrated 360° XR experiences. Features immersive XR experiences, robust image galleries, enhanced audio controls, and comprehensive audio synchronization with A-Frame 360° viewer integration.
 
-## 🆕 Latest Updates (v2.1) - January 2025
+## 🆕 Latest Updates (v2.2) - January 2025
+
+### Mobile XR Experience Optimizations 🎯
+- **Fixed Touch Controls**: Reversed touch input on mobile devices to match desktop camera behavior for consistent XR navigation
+- **Enhanced Color Rendering**: Fixed A-Frame videosphere color/hue shift differences between desktop and mobile devices - reds now render correctly
+- **Optimized Loading Experience**: Landing page now remains visible until XR teaser scene is fully loaded and ready to play
+- **Mobile Performance**: Optimized initial load times for XR mode on mobile devices with adaptive quality settings
+- **Cross-Platform Stability**: Enhanced media loading with robust fallbacks and retry mechanisms for better mobile browser compatibility
+
+### Advanced Mobile Compatibility 📱
+- **Enhanced Browser Detection**: Specific optimizations for iOS Safari, Android Chrome, Firefox, and other mobile browsers
+- **Improved Touch Handling**: Better touch responsiveness with browser-specific optimizations and enhanced gesture support
+- **Network-Aware Loading**: Adaptive video loading based on connection speed with progressive quality enhancement
+- **Memory Management**: Improved resource cleanup and performance monitoring for extended mobile sessions
+- **Error Recovery**: Enhanced retry mechanisms with intelligent fallback strategies for various network conditions
+
+### Developer Experience Improvements 🛠️
+- **HTTPS Development Server**: Enhanced development environment with proper SSL certificates for device sensor access during local development
+- **Better Debug Tools**: Improved logging and monitoring for XR scene initialization and performance metrics
+- **Enhanced Message Protocol**: More robust communication between main app and XR iframe with comprehensive error handling
+- **Type Safety**: Added new message types for XR scene readiness and improved TypeScript definitions
+
+## 🆕 Previous Updates (v2.1) - January 2025
 
 ### Smart Preloading & Performance ⚡
 - **Enhanced Smart Preloading**: Now preloads XR, audio, and photo content for previous AND next tracks for seamless navigation
@@ -734,6 +756,72 @@ testSimplifiedXR.checkVideoSync()
 
 ---
 
+## 🛠️ Development Setup
+
+### Prerequisites
+- Node.js 18+
+- npm or yarn
+- `mkcert` for HTTPS development (installed via brew)
+
+### Quick Start
+
+```bash
+# Clone and install dependencies
+npm install
+
+# Install HTTPS certificate generator
+brew install mkcert
+
+# Start HTTPS development server
+npm run dev
+```
+
+The development server will automatically:
+- ✅ Generate SSL certificates for device sensor access
+- ✅ Start on `https://localhost:3001` and `https://[your-ip]:3001`  
+- ✅ Enable hot module replacement for instant code updates
+- ✅ Allow mobile device testing with accelerometer/gyroscope access
+
+### Mobile Testing Setup
+
+For testing XR features on mobile devices:
+
+1. **Connect to local HTTPS server**: `https://[your-ip]:3001`
+2. **Accept security warning**: Browser will show certificate warning - click "Advanced" → "Proceed"
+3. **Grant device permissions**: iOS/Android will prompt for orientation access when entering XR mode
+4. **Test accelerometer**: Device orientation should control XR camera movement
+
+### Debug Tools
+
+```javascript
+// Console debugging tools available during development:
+window.xrDebug?.isReady                    // Check XR scene status
+window.xrDebug?.requestSyncReport()        // Get sync performance data
+window.xrDebug?.resetSync()                // Reset audio/video sync
+window.recenterXRViewer?.()                // Recenter XR camera view
+```
+
+### Development Environment Features
+
+- **HTTPS by Default**: Required for device sensor access on mobile
+- **Network Access**: Test from any device on your local network
+- **Error Recovery**: Robust media loading with retry mechanisms  
+- **Performance Monitoring**: Real-time sync and performance logging
+- **Mobile Browser Support**: Optimized for iOS Safari, Android Chrome, Firefox
+
+### Troubleshooting
+
+**Certificate Issues**: If mobile devices can't connect, regenerate certificates:
+```bash
+rm -rf .certs
+mkcert -key-file .certs/key.pem -cert-file .certs/cert.pem localhost [your-ip]
+npm run dev
+```
+
+**Permission Issues**: On iOS, ensure `https://` is used (not `http://`) for device sensor access.
+
+---
+
 **Your mobile XR audio walking tour application now provides a truly immersive, production-ready experience that rivals professional VR applications while maintaining excellent mobile performance and user experience!** 🚀
 
 This comprehensive integration brings together:
@@ -742,3 +830,4 @@ This comprehensive integration brings together:
 - ✅ 360° XR video integration with perfect audio sync
 - ✅ Mobile-optimized touch controls throughout
 - ✅ Production-ready performance and error handling
+- ✅ Enhanced HTTPS development environment for mobile testing

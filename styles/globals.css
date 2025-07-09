@@ -5,7 +5,7 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --font-size: 14px;
+  --font-size: 16px;
   --background: #ffffff;
   --foreground: oklch(0.145 0 0);
   --card: #ffffff;
@@ -323,27 +323,77 @@ body {
   .responsive-container {
     container-type: inline-size;
   }
+  
+  /* Enhanced mobile viewport utilities */
+  .viewport-fit {
+    height: 100vh;
+    height: 100dvh; /* Dynamic viewport height */
+    min-height: 100vh;
+    min-height: 100dvh;
+  }
+  
+  .mobile-viewport {
+    /* Ensure content never exceeds viewport */
+    max-height: 100vh;
+    max-height: 100dvh;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+  
+  .compact-mobile {
+    /* Reduce spacing on smaller screens */
+    @media (max-height: 667px) {
+      & .space-y-6 > * + * { margin-top: 1rem; }
+      & .space-y-4 > * + * { margin-top: 0.75rem; }
+      & .space-y-3 > * + * { margin-top: 0.5rem; }
+      & .pt-12 { padding-top: 1.5rem; }
+      & .pt-16 { padding-top: 2rem; }
+      & .pb-6 { padding-bottom: 1rem; }
+    }
+  }
+  
+  .short-viewport {
+    /* Adjustments for very short screens (landscape phones) */
+    @media (max-height: 500px) {
+      & .space-y-6 > * + * { margin-top: 0.5rem; }
+      & .space-y-4 > * + * { margin-top: 0.375rem; }
+      & .space-y-3 > * + * { margin-top: 0.25rem; }
+      & .pt-12 { padding-top: 0.5rem; }
+      & .pt-16 { padding-top: 0.75rem; }
+      & .pb-6 { padding-bottom: 0.5rem; }
+    }
+  }
+  
+  .text-size-responsive {
+    /* Scale text based on viewport height */
+    font-size: clamp(0.75rem, 2vh, 1rem);
+  }
+  
+  .heading-size-responsive {
+    /* Scale headings based on viewport height */
+    font-size: clamp(1.25rem, 4vh, 2rem);
+  }
 }
 
 /* Device-specific breakpoints */
 @media (min-width: 375px) and (max-width: 767px) {
   /* Phone portrait */
   :root {
-    --font-size: 14px;
+    --font-size: 16px;
   }
 }
 
 @media (min-width: 768px) and (max-width: 1024px) {
   /* Tablet portrait/landscape */
   :root {
-    --font-size: 16px;
+    --font-size: 18px;
   }
 }
 
 @media (min-width: 1025px) {
   /* Large tablet/small desktop */
   :root {
-    --font-size: 16px;
+    --font-size: 18px;
   }
 }
 
@@ -369,5 +419,45 @@ body {
 @media (prefers-color-scheme: dark) {
   :root {
     color-scheme: dark;
+  }
+}
+
+/* Enhanced XR Scene Animations */
+@keyframes xrSceneZoomIn {
+  0% { transform: scale(0.95); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes xrSceneZoomOut {
+  0% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(1.05); opacity: 0; }
+}
+
+/* Audio Slider Tooltip Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(4px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+@keyframes scaleIn {
+  from { 
+    opacity: 0; 
+    transform: translateX(-50%) scale(0.8); 
+  }
+  to { 
+    opacity: 1; 
+    transform: translateX(-50%) scale(1); 
+  }
+}
+
+/* XR Icon Subtle Pulse Animation */
+@keyframes subtle-pulse {
+  0%, 100% { 
+    opacity: 0.75; 
+    transform: scale(1); 
+  }
+  50% { 
+    opacity: 1; 
+    transform: scale(1.05); 
   }
 }

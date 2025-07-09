@@ -3,6 +3,7 @@ import {
   AudioPlayer,
   AudioMessage,
 } from "./components/AudioPlayer";
+import { DeveloperConfig, DeveloperConfigSelection } from "./components/DeveloperConfig";
 import { Button } from "./components/ui/button";
 import {
   MapPin,
@@ -101,10 +102,12 @@ const requestDeviceOrientationPermission = async (): Promise<DeviceOrientationPe
 };
 
 export default function App() {
+  const [showDeveloperConfig, setShowDeveloperConfig] = useState(true);
   const [showLandingPage, setShowLandingPage] = useState(true);
   const [isTeaserMode, setIsTeaserMode] = useState(false);
   const [teaserPreloaded, setTeaserPreloaded] = useState(false);
   const [teaserPreloading, setTeaserPreloading] = useState(false);
+  const [developerConfig, setDeveloperConfig] = useState<DeveloperConfigSelection | null>(null);
   const [
     deviceOrientationPermission,
     setDeviceOrientationPermission,
@@ -164,6 +167,23 @@ export default function App() {
     };
   }, []);
 
+  // Handle developer configuration completion
+  const handleDeveloperConfigComplete = useCallback((config: DeveloperConfigSelection) => {
+    console.log('🔧 Developer configuration received:', config);
+    setDeveloperConfig(config);
+    setIsTeaserMode(config.mode === 'teaser');
+    setShowDeveloperConfig(false);
+    
+    // If valid configuration, start preloading
+    if (config.isValid) {
+      setTeaserPreloading(true);
+      setTimeout(() => {
+        setTeaserPreloaded(true);
+        setTeaserPreloading(false);
+      }, 1000);
+    }
+  }, []);
+
   // Handle audio sync messages from AudioPlayer with mode-aware logging
   const handleAudioMessage = (message: AudioMessage) => {
     const modePrefix = isTeaserMode ? "🎬 [TEASER]" : "🎵 [FULL]";
@@ -185,6 +205,11 @@ export default function App() {
         console.log(
           `${modePrefix} Playback ${message.data?.isPlaying ? "started" : "paused"} at ${message.data?.currentTime}s`,
         );
+        // Also hide landing page when audio starts playing in teaser mode 
+        if (isTeaserMode && showLandingPage && message.data?.isPlaying) {
+          console.log(`${modePrefix} Audio started playing - hiding landing page (content is ready)`);
+          setShowLandingPage(false);
+        }
         break;
       case "time-update":
         // These fire frequently, so we'll only log occasionally
@@ -218,24 +243,15 @@ export default function App() {
           console.log(`${modePrefix} XR mode activated - hiding landing page immediately`);
           setShowLandingPage(false);
         }
-        break;
-      case "playback-state":
-        // Also hide landing page when audio starts playing in teaser mode 
-        if (isTeaserMode && showLandingPage && message.data?.isPlaying) {
-          console.log(`${modePrefix} Audio started playing - hiding landing page (content is ready)`);
-          setShowLandingPage(false);
-        }
-        break;
-        if (message.type === "xr-mode-change") {
-          const xrMessage = message as any;
-          console.log(
-            `${modePrefix} XR Mode ${xrMessage.data?.isXRMode ? "ENABLED" : "DISABLED"} for track: "${xrMessage.data?.trackData?.title}"`,
-            "| Video URL:",
-            xrMessage.data?.trackData?.xrSrc,
-            "| Device Orientation:",
-            xrMessage.data?.deviceOrientationPermission?.granted ? "GRANTED" : "DENIED",
-          );
-        }
+        // Enhanced XR mode logging
+        const xrMessage = message as any;
+        console.log(
+          `${modePrefix} XR Mode ${xrMessage.data?.isXRMode ? "ENABLED" : "DISABLED"} for track: "${xrMessage.data?.trackData?.title}"`,
+          "| Video URL:",
+          xrMessage.data?.trackData?.xrSrc,
+          "| Device Orientation:",
+          xrMessage.data?.deviceOrientationPermission?.granted ? "GRANTED" : "DENIED",
+        );
         break;
       case "track-change":
         console.log(
@@ -337,22 +353,28 @@ export default function App() {
 
   return (
     <div className={`dark viewport-fit bg-gradient-to-br from-slate-900 to-slate-800 ${APP_Z_LAYERS.BACKGROUND} overflow-hidden fixed inset-0 mobile-optimized`}>
+      {/* Developer Configuration - Shown first before everything else */}
+      {showDeveloperConfig && (
+        <DeveloperConfig onConfigurationComplete={handleDeveloperConfigComplete} />
+      )}
+      
       {/* Mobile-First App Container - Using fixed viewport height to prevent scrolling */}
-      <div className={`fixed inset-0 w-full h-full max-w-none mx-auto flex flex-col safe-top safe-bottom safe-left safe-right ${isKeyboardOpen ? 'keyboard-adaptive' : ''} ${orientation === 'landscape' ? 'landscape-compact' : ''}`}>
-          {/* Main Content Area - AudioPlayer fills available space */}
-          <div className={`flex-1 h-full overflow-hidden ${APP_Z_LAYERS.MAIN_CONTENT}`}>
-            <AudioPlayer
-              onAudioMessage={handleAudioMessage}
-              deviceOrientationPermission={
-                deviceOrientationPermission
-              }
-              isTeaserMode={isTeaserMode}
-              teaserPreloading={teaserPreloading}
-            />
-          </div>
+      {!showDeveloperConfig && (
+        <div className={`fixed inset-0 w-full h-full max-w-none mx-auto flex flex-col safe-top safe-bottom safe-left safe-right ${isKeyboardOpen ? 'keyboard-adaptive' : ''} ${orientation === 'landscape' ? 'landscape-compact' : ''}`}>
+            {/* Main Content Area - AudioPlayer fills available space */}
+            <div className={`flex-1 h-full overflow-hidden ${APP_Z_LAYERS.MAIN_CONTENT}`}>
+              <AudioPlayer
+                onAudioMessage={handleAudioMessage}
+                deviceOrientationPermission={
+                  deviceOrientationPermission
+                }
+                isTeaserMode={isTeaserMode}
+                teaserPreloading={teaserPreloading}
+              />
+            </div>
 
-          {/* Landing Page Overlay - Renders on top when showLandingPage is true */}
-          {showLandingPage && (
+            {/* Landing Page Overlay - Renders on top when showLandingPage is true */}
+            {showLandingPage && (
             <div className={`fixed inset-0 ${APP_Z_LAYERS.LANDING_OVERLAY} bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex flex-col mobile-viewport compact-mobile short-viewport`}>
               {/* Landing Page Content - Optimized for mobile viewport */}
               <div className="flex-1 flex flex-col justify-between min-h-0 safe-all">
@@ -494,7 +516,8 @@ export default function App() {
               </div>
             </div>
           )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

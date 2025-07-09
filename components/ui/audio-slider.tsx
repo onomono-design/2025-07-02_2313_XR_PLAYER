@@ -42,9 +42,15 @@ export function AudioSlider({
   ...props
 }: AudioSliderProps) {
   const [isDragging, setIsDragging] = React.useState(false);
+  const [dragValue, setDragValue] = React.useState<number | null>(null);
   const [hoverPosition, setHoverPosition] = React.useState<number | null>(null);
   const [isMobileDevice, setIsMobileDevice] = React.useState(false);
+  const [isHovering, setIsHovering] = React.useState(false);
+  const [isTimecodeVisible, setIsTimecodeVisible] = React.useState(false);
+  const [fadeOutTimecode, setFadeOutTimecode] = React.useState(false);
   const trackRef = React.useRef<HTMLDivElement>(null);
+  const thumbRef = React.useRef<HTMLElement>(null);
+  const fadeTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Detect mobile device for optimized touch interactions
   React.useEffect(() => {
@@ -65,57 +71,102 @@ export function AudioSlider({
     return position * duration;
   };
 
+  const getPositionFromTime = (time: number) => {
+    if (duration === 0) return 0;
+    return Math.max(0, Math.min(100, (time / duration) * 100));
+  };
+
   const handleMouseMove = (e: React.MouseEvent) => {
     if (!showTimeTooltip || isMobileDevice) return;
     const time = getTimeFromPosition(e.clientX);
     setHoverPosition(time);
   };
 
+  const handleMouseEnter = () => {
+    setIsHovering(true);
+  };
+
   const handleMouseLeave = () => {
+    setIsHovering(false);
     if (!isMobileDevice) {
       setHoverPosition(null);
     }
   };
 
-  // Enhanced touch handling for mobile devices
-  const handleTouchStart = () => {
+  // Enhanced touch and drag handling
+  const handleDragStart = () => {
     if (isMobileDevice && 'vibrate' in navigator) {
-      navigator.vibrate(5); // Light haptic feedback on touch start
+      navigator.vibrate(5); // Light haptic feedback
     }
     setIsDragging(true);
+    setIsTimecodeVisible(true);
+    setFadeOutTimecode(false);
+    
+    // Clear any existing fade timeout
+    if (fadeTimeoutRef.current) {
+      clearTimeout(fadeTimeoutRef.current);
+      fadeTimeoutRef.current = null;
+    }
   };
 
-  const handleTouchEnd = () => {
+  const handleDragEnd = () => {
     setIsDragging(false);
+    setDragValue(null);
+    
+    // Start fade out animation
+    setFadeOutTimecode(true);
+    
+    // Hide timecode after fade animation completes
+    fadeTimeoutRef.current = setTimeout(() => {
+      setIsTimecodeVisible(false);
+      setFadeOutTimecode(false);
+    }, 300); // Match fade animation duration
+    
     // Keep hover position visible briefly on mobile for feedback
     if (isMobileDevice) {
-      setTimeout(() => setHoverPosition(null), 1000);
+      setTimeout(() => setHoverPosition(null), 800);
+    }
+  };
+
+  const handleValueChange = (value: number[]) => {
+    if (isDragging) {
+      setDragValue(value[0]);
+    }
+    if (props.onValueChange) {
+      props.onValueChange(value);
     }
   };
 
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+  const displayProgress = isDragging && dragValue !== null ? dragValue : progress;
   const bufferProgress = buffered * 100;
+  const displayTime = isDragging && dragValue !== null ? (dragValue / 100) * duration : currentTime;
 
   const baseSliderClasses = cn(
-    "relative flex w-full touch-none select-none items-center",
-    "data-[disabled]:opacity-50",
-    largeTouchTargets ? "h-12 py-4" : "h-6 py-2",
+    "relative flex w-full touch-none select-none items-center group",
+    "data-[disabled]:opacity-50 transition-all duration-200",
+    largeTouchTargets ? "h-14 py-5" : "h-8 py-3", // Increased touch area
     className
   );
 
   const trackClasses = cn(
-    "relative grow overflow-hidden rounded-full bg-slate-600/50",
-    largeTouchTargets ? "h-4" : "h-2",
-    variant === "glass" && "bg-white/20 backdrop-blur-sm",
+    "relative grow overflow-hidden rounded-full transition-all duration-200",
+    largeTouchTargets ? "h-4" : "h-3", // Slightly larger track
+    variant === "default" && "bg-slate-600/50 group-hover:bg-slate-600/70",
+    variant === "glass" && "bg-white/20 backdrop-blur-sm group-hover:bg-white/30",
+    variant === "gradient" && "bg-slate-600/50 group-hover:bg-slate-600/70",
   );
 
   const thumbClasses = cn(
-    "block rounded-full border-2 border-white bg-white shadow-lg",
-    "hover:scale-110 focus-visible:scale-110 focus-visible:outline-none",
+    "block rounded-full border-2 shadow-lg transition-all duration-200 ease-out",
+    "hover:scale-110 focus-visible:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500",
     "active:scale-95 disabled:pointer-events-none disabled:opacity-50",
-    largeTouchTargets ? "h-6 w-6" : "h-4 w-4",
-    isDragging && "scale-125 shadow-xl",
+    "group-hover:scale-105",
+    largeTouchTargets ? "h-6 w-6" : "h-5 w-5",
+    isDragging && "scale-125 shadow-xl ring-2 ring-blue-500/50",
+    variant === "default" && "border-blue-500 bg-white",
     variant === "glass" && "bg-white/90 border-white/60",
+    variant === "gradient" && "border-white bg-white",
   );
 
   return (
@@ -123,11 +174,15 @@ export function AudioSlider({
       <SliderPrimitive.Root
         className={baseSliderClasses}
         onMouseMove={handleMouseMove}
+        onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
-        onTouchStart={handleTouchStart}
-        onTouchEnd={handleTouchEnd}
-        onValueChange={() => setIsDragging(true)}
-        onValueCommit={() => setIsDragging(false)}
+        onValueChange={handleValueChange}
+        onValueCommit={(value) => {
+          handleDragEnd();
+          if (props.onValueCommit) {
+            props.onValueCommit(value);
+          }
+        }}
         {...props}
       >
         <SliderPrimitive.Track
@@ -137,57 +192,79 @@ export function AudioSlider({
           {/* Buffer progress - shows loaded content */}
           <div
             className={cn(
-              "absolute h-full rounded-full bg-slate-400/40",
+              "absolute h-full rounded-full transition-all duration-300",
+              variant === "default" && "bg-slate-400/40",
               variant === "glass" && "bg-white/30",
+              variant === "gradient" && "bg-slate-400/40",
             )}
             style={{ width: `${bufferProgress}%` }}
           />
           
-          {/* Played progress - shows current position */}
+          {/* Played progress - shows current position with flat end cap */}
           <SliderPrimitive.Range
             className={cn(
-              "absolute h-full rounded-full",
+              "absolute h-full transition-all duration-150",
               variant === "default" && "bg-blue-500",
               variant === "glass" && "bg-white/70",
               variant === "gradient" && "bg-gradient-to-r from-blue-500 to-purple-600",
+              isDragging && "transition-none", // Remove transition during drag for smoothness
             )}
+            style={{
+              borderRadius: '9999px 0 0 9999px', // Flat end cap (right side)
+            }}
           />
         </SliderPrimitive.Track>
         
         <SliderPrimitive.Thumb 
+          ref={thumbRef}
           className={thumbClasses}
           style={{
-            transition: isDragging ? 'none' : undefined
+            transition: isDragging ? 'none' : 'all 0.2s ease-out',
           }}
+          onPointerDown={handleDragStart}
         />
       </SliderPrimitive.Root>
 
-
-
-      {/* Hover time tooltip */}
-      {showTimeTooltip && hoverPosition !== null && !isDragging && (
+      {/* Enhanced hover time tooltip */}
+      {showTimeTooltip && hoverPosition !== null && !isDragging && isHovering && (
         <div
-          className="absolute -top-8 transform -translate-x-1/2 bg-black/80 text-white text-xs px-2 py-1 rounded pointer-events-none z-10"
+          className="absolute -top-10 transform -translate-x-1/2 bg-black/90 backdrop-blur-sm text-white text-xs px-3 py-1.5 rounded-lg pointer-events-none z-20 border border-white/20 shadow-lg"
           style={{
             left: `${duration > 0 ? (hoverPosition / duration) * 100 : 0}%`,
+            animation: 'fadeIn 0.2s ease-out',
           }}
         >
-          {formatTime(hoverPosition)}
+          <div className="text-center">
+            {formatTime(hoverPosition)}
+          </div>
+          {/* Tooltip arrow */}
+          <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-[4px] border-r-[4px] border-t-[4px] border-l-transparent border-r-transparent border-t-black/90"></div>
         </div>
       )}
 
-      {/* Current time tooltip when dragging */}
+      {/* Enhanced dragging tooltip with scaling animation anchored to thumb */}
       {isDragging && (
         <div
-          className="absolute -top-8 transform -translate-x-1/2 bg-blue-600 text-white text-xs px-2 py-1 rounded pointer-events-none z-10 shadow-lg"
+          className="absolute transform -translate-x-1/2 bg-blue-600/95 backdrop-blur-sm text-white text-sm px-4 py-2 rounded-lg pointer-events-none z-30 shadow-xl border border-blue-400/30"
           style={{
-            left: `${progress}%`,
-            transition: 'none'
+            left: `${displayProgress}%`,
+            top: largeTouchTargets ? '-3.5rem' : '-3rem',
+            transition: 'none',
+            animation: 'scaleIn 0.15s ease-out',
           }}
         >
-          {formatTime(currentTime)}
+          <div className="text-center font-medium">
+            {formatTime(displayTime)}
+          </div>
+          {/* Enhanced tooltip arrow */}
+          <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-[6px] border-r-[6px] border-t-[6px] border-l-transparent border-r-transparent border-t-blue-600/95"></div>
         </div>
       )}
+
+      {/* Accessibility enhancements */}
+      <div className="sr-only" aria-live="polite">
+        {isDragging ? `Seeking to ${formatTime(displayTime)}` : `Current time ${formatTime(currentTime)} of ${formatTime(duration)}`}
+      </div>
     </div>
   );
 }

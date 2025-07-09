@@ -27,7 +27,8 @@ import {
   Loader2,
   Smartphone,
   AlertTriangle,
-  MapPin
+  MapPin,
+  ImageIcon
 } from 'lucide-react';
 
 // Z-Index Layer System - Organized hierarchy to prevent conflicts
@@ -360,6 +361,17 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
   const [fullscreenImageIndex, setFullscreenImageIndex] = useState(0);
   const [fullscreenZoom, setFullscreenZoom] = useState(1);
   const [showFullscreenInfo, setShowFullscreenInfo] = useState(false);
+  
+  // Enhanced fullscreen pan/zoom state
+  const [fullscreenPanX, setFullscreenPanX] = useState(0);
+  const [fullscreenPanY, setFullscreenPanY] = useState(0);
+  const [isPanning, setIsPanning] = useState(false);
+  const [panStartX, setPanStartX] = useState(0);
+  const [panStartY, setPanStartY] = useState(0);
+  const [lastPanX, setLastPanX] = useState(0);
+  const [lastPanY, setLastPanY] = useState(0);
+  const fullscreenImageRef = useRef<HTMLImageElement>(null);
+  const fullscreenContainerRef = useRef<HTMLDivElement>(null);
   
   // Refs
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -1436,6 +1448,8 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
     };
   }, [isDragging, handleDragMove, handleDragEnd]);
 
+
+
   // Loading state
   if (!tourConfig || tracks.length === 0) {
     return (
@@ -1760,13 +1774,15 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
     }, 300);
   };
 
-  // Fullscreen functions (disabled in teaser mode)
+  // Enhanced fullscreen functions with pan/zoom support (disabled in teaser mode)
   const launchFullscreenMode = () => {
     if (isTeaserMode) return;
     
     setIsFullscreenMode(true);
     setFullscreenImageIndex(currentThumbnailIndex);
     setFullscreenZoom(1);
+    setFullscreenPanX(0);
+    setFullscreenPanY(0);
     setShowFullscreenInfo(false);
     setShowPlaylist(false);
   };
@@ -1775,6 +1791,8 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
     console.log('🖼️ EXIT BUTTON CLICKED - Exiting fullscreen mode');
     setIsFullscreenMode(false);
     setFullscreenZoom(1);
+    setFullscreenPanX(0);
+    setFullscreenPanY(0);
     setShowFullscreenInfo(false);
     console.log('🖼️ Fullscreen mode state updated to false');
   };
@@ -1783,6 +1801,8 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
     if (!track.thumbnails || track.thumbnails.length <= 1) return;
     setFullscreenImageIndex((prev) => (prev + 1) % track.thumbnails!.length);
     setFullscreenZoom(1);
+    setFullscreenPanX(0);
+    setFullscreenPanY(0);
     setShowFullscreenInfo(false);
   };
 
@@ -1790,12 +1810,144 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
     if (!track.thumbnails || track.thumbnails.length <= 1) return;
     setFullscreenImageIndex((prev) => (prev - 1 + track.thumbnails!.length) % track.thumbnails!.length);
     setFullscreenZoom(1);
+    setFullscreenPanX(0);
+    setFullscreenPanY(0);
     setShowFullscreenInfo(false);
   };
 
+  // Enhanced zoom with multiple levels and centering
   const toggleFullscreenZoom = () => {
-    setFullscreenZoom(prev => prev === 1 ? 2.5 : 1);
+    const zoomLevels = [1, 1.5, 2, 2.5, 3];
+    const currentIndex = zoomLevels.indexOf(fullscreenZoom);
+    const nextIndex = (currentIndex + 1) % zoomLevels.length;
+    const newZoom = zoomLevels[nextIndex];
+    
+    setFullscreenZoom(newZoom);
+    
+    // Reset pan when zooming out to 1x
+    if (newZoom === 1) {
+      setFullscreenPanX(0);
+      setFullscreenPanY(0);
+    }
   };
+
+  // Pan handling functions
+  const handlePanStart = useCallback((clientX: number, clientY: number) => {
+    if (fullscreenZoom <= 1) return;
+    
+    setIsPanning(true);
+    setPanStartX(clientX);
+    setPanStartY(clientY);
+    setLastPanX(fullscreenPanX);
+    setLastPanY(fullscreenPanY);
+  }, [fullscreenZoom, fullscreenPanX, fullscreenPanY]);
+
+  const handlePanMove = useCallback((clientX: number, clientY: number) => {
+    if (!isPanning || fullscreenZoom <= 1) return;
+    
+    const deltaX = clientX - panStartX;
+    const deltaY = clientY - panStartY;
+    
+    // Calculate the bounds based on image size and zoom
+    const container = fullscreenContainerRef.current;
+    const image = fullscreenImageRef.current;
+    
+    if (!container || !image) return;
+    
+    const containerRect = container.getBoundingClientRect();
+    const imageRect = image.getBoundingClientRect();
+    
+    // Calculate maximum pan distance
+    const maxPanX = Math.max(0, (imageRect.width * fullscreenZoom - containerRect.width) / 2);
+    const maxPanY = Math.max(0, (imageRect.height * fullscreenZoom - containerRect.height) / 2);
+    
+    // Apply constraints
+    const newPanX = Math.max(-maxPanX, Math.min(maxPanX, lastPanX + deltaX));
+    const newPanY = Math.max(-maxPanY, Math.min(maxPanY, lastPanY + deltaY));
+    
+    setFullscreenPanX(newPanX);
+    setFullscreenPanY(newPanY);
+  }, [isPanning, fullscreenZoom, panStartX, panStartY, lastPanX, lastPanY]);
+
+  const handlePanEnd = useCallback(() => {
+    setIsPanning(false);
+  }, []);
+
+  // Mouse event handlers for fullscreen pan
+  const handleFullscreenMouseDown = useCallback((e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).closest('button')) return;
+    handlePanStart(e.clientX, e.clientY);
+  }, [handlePanStart]);
+
+  const handleFullscreenMouseMove = useCallback((e: React.MouseEvent) => {
+    handlePanMove(e.clientX, e.clientY);
+  }, [handlePanMove]);
+
+  const handleFullscreenMouseUp = useCallback(() => {
+    handlePanEnd();
+  }, [handlePanEnd]);
+
+  // Touch event handlers for fullscreen pan
+  const handleFullscreenTouchStart = useCallback((e: React.TouchEvent) => {
+    if ((e.target as HTMLElement).closest('button')) return;
+    const touch = e.touches[0];
+    handlePanStart(touch.clientX, touch.clientY);
+  }, [handlePanStart]);
+
+  const handleFullscreenTouchMove = useCallback((e: React.TouchEvent) => {
+    e.preventDefault();
+    const touch = e.touches[0];
+    handlePanMove(touch.clientX, touch.clientY);
+  }, [handlePanMove]);
+
+  const handleFullscreenTouchEnd = useCallback(() => {
+    handlePanEnd();
+  }, [handlePanEnd]);
+
+  // Zoom in/out functions
+  const zoomIn = () => {
+    const zoomLevels = [1, 1.5, 2, 2.5, 3];
+    const currentIndex = zoomLevels.indexOf(fullscreenZoom);
+    if (currentIndex < zoomLevels.length - 1) {
+      setFullscreenZoom(zoomLevels[currentIndex + 1]);
+    }
+  };
+
+  const zoomOut = () => {
+    const zoomLevels = [1, 1.5, 2, 2.5, 3];
+    const currentIndex = zoomLevels.indexOf(fullscreenZoom);
+    if (currentIndex > 0) {
+      const newZoom = zoomLevels[currentIndex - 1];
+      setFullscreenZoom(newZoom);
+      
+      // Reset pan when zooming out to 1x
+      if (newZoom === 1) {
+        setFullscreenPanX(0);
+        setFullscreenPanY(0);
+      }
+    }
+  };
+
+  // Global mouse events for fullscreen pan continuation
+  useEffect(() => {
+    if (!isPanning) return;
+    
+    const handleGlobalMouseMove = (e: MouseEvent) => {
+      handlePanMove(e.clientX, e.clientY);
+    };
+    
+    const handleGlobalMouseUp = () => {
+      handlePanEnd();
+    };
+    
+    document.addEventListener('mousemove', handleGlobalMouseMove);
+    document.addEventListener('mouseup', handleGlobalMouseUp);
+    
+    return () => {
+      document.removeEventListener('mousemove', handleGlobalMouseMove);
+      document.removeEventListener('mouseup', handleGlobalMouseUp);
+    };
+  }, [isPanning, handlePanMove, handlePanEnd]);
 
   const handleSeek = (value: number[]) => {
     const previousTime = currentTime;
@@ -2129,10 +2281,10 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
   // Audio Controller XR Mode - Streamlined variant (no audio-only option in teaser)
   const audioControllerXRmode = (
     <div className="mx-4 md:mx-6 lg:mx-8 mb-6 md:mb-8">
-      <div className="bg-black/40 backdrop-blur-sm rounded-lg p-4 md:p-6 lg:p-8 max-w-lg mx-auto border border-white/20 touch-target">
+      <div className="bg-black/40 backdrop-blur-sm rounded-lg p-3 md:p-4 lg:p-5 max-w-lg mx-auto border border-white/20 touch-target">
         {/* XR Scene Status Indicator */}
         {!xrSceneReady && (
-          <div className="mb-3 flex items-center justify-center gap-2 text-yellow-300 text-xs">
+          <div className="mb-2 flex items-center justify-center gap-2 text-yellow-300 text-xs">
             <div className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse"></div>
             <span>Initializing XR scene...</span>
           </div>
@@ -2140,17 +2292,9 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
         
         {/* Videosphere Material Status Indicator */}
         {xrSceneReady && !videosphereMaterialReady && (
-          <div className="mb-3 flex items-center justify-center gap-2 text-blue-300 text-xs">
+          <div className="mb-2 flex items-center justify-center gap-2 text-blue-300 text-xs">
             <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
             <span>Loading videosphere material...</span>
-          </div>
-        )}
-        
-        {/* Sync Status Indicator (Teaser Mode) */}
-        {isTeaserMode && xrSceneReady && videosphereMaterialReady && !isPlaying && (
-          <div className="mb-3 flex items-center justify-center gap-2 text-green-300 text-xs">
-            <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-            <span>Ready to play - fully synchronized</span>
           </div>
         )}
         
@@ -2171,7 +2315,7 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
         </div>
 
         {/* XR Time Display with Sync Status */}
-        <div className="flex justify-between text-xs mb-4">
+        <div className="flex justify-between text-xs mb-3">
           <div className="flex items-center gap-1">
             <span className="text-slate-400">{formatTime(currentTime)}</span>
             {isPlaying && (
@@ -2181,85 +2325,108 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
           <span className="text-slate-400">{formatTime(duration)}</span>
         </div>
 
-        {/* XR Main Controls - Simplified for teaser or full for regular */}
+        {/* XR Main Controls - Enhanced with seek controls */}
         <div className="flex items-center justify-between">
-          {/* Left - Audio Only button (hidden in teaser) */}
+          {/* Left - Return to Audio+Slideshow mode button (hidden in teaser) */}
           {!isTeaserMode ? (
             <Button
               onClick={exitXRMode}
-              className="bg-black/40 hover:bg-black/60 active:bg-black/70 backdrop-blur-sm text-white border border-white/20 text-xs px-2 py-1 h-auto transition-all duration-200 ease-out active:scale-95"
+              size="icon"
+              className="bg-black/40 hover:bg-black/60 active:bg-black/70 backdrop-blur-sm text-white border border-white/20 h-10 w-10 transition-all duration-200 ease-out active:scale-95 hover:scale-105"
+              title="Return to audio with slideshow"
             >
-              <AudioWaveform className="h-3 w-3 mr-1" />
-              Audio
+              <ImageIcon className="h-4 w-4" />
             </Button>
           ) : (
             <div className="w-10"></div>
           )}
 
           {/* Center - Playback Controls */}
-          <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-2">
             <Button
               variant="ghost"
               size="icon"
-              onClick={previousTrack}
-              disabled={isTeaserMode}
-              className={`h-10 w-10 transition-all duration-200 ease-out active:scale-95 ${
-                isTeaserMode 
-                  ? 'text-slate-500 cursor-not-allowed opacity-50'
-                  : 'text-slate-300 hover:text-white hover:bg-white/20'
-              }`}
+              onClick={() => {
+                const newTime = Math.max(0, currentTime - 10);
+                if (audioRef.current) {
+                  audioRef.current.currentTime = newTime;
+                }
+                setCurrentTime(newTime);
+                sendAudioMessage({
+                  type: 'seek',
+                  timestamp: performance.now(),
+                  data: {
+                    currentTime: newTime,
+                    previousTime: currentTime
+                  }
+                });
+              }}
+              className="h-10 w-10 md:h-12 md:w-12 text-slate-300 hover:text-white hover:bg-white/20 transition-all duration-200 ease-out active:scale-95 hover:scale-105"
+              title="Rewind 10 seconds"
             >
-              <SkipBack className="h-4 w-4" />
+              <svg className="h-5 w-5 md:h-6 md:w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12.066 11.2a1 1 0 000 1.6l5.334 4A1 1 0 0019 16V8a1 1 0 00-1.6-.8l-5.334 4zM4.066 11.2a1 1 0 000 1.6l5.334 4A1 1 0 0011 16V8a1 1 0 00-1.6-.8l-5.334 4z" />
+                <text x="12" y="20" fontSize="7" textAnchor="middle" fill="currentColor" fontWeight="bold">10</text>
+              </svg>
             </Button>
 
             <Button
               onClick={togglePlay}
               size="icon"
-              className="h-12 w-12 bg-white hover:bg-slate-100 active:bg-slate-200 text-slate-900 transition-all duration-200 ease-out active:scale-95 hover:scale-105"
+              className="h-12 w-12 md:h-14 md:w-14 bg-white hover:bg-slate-100 active:bg-slate-200 text-slate-900 transition-all duration-200 ease-out active:scale-95 hover:scale-105"
             >
               {isPlaying ? (
-                <Pause className="h-5 w-5" />
+                <Pause className="h-5 w-5 md:h-6 md:w-6" />
               ) : (
-                <Play className="h-5 w-5 ml-0.5" />
+                <Play className="h-5 w-5 md:h-6 md:w-6 ml-0.5" />
               )}
             </Button>
 
             <Button
               variant="ghost"
               size="icon"
-              onClick={nextTrack}
-              disabled={isTeaserMode}
-              className={`h-10 w-10 transition-all duration-200 ease-out active:scale-95 ${
-                isTeaserMode 
-                  ? 'text-slate-500 cursor-not-allowed opacity-50'
-                  : 'text-slate-300 hover:text-white hover:bg-white/20'
-              }`}
+              onClick={() => {
+                const newTime = Math.min(duration, currentTime + 10);
+                if (audioRef.current) {
+                  audioRef.current.currentTime = newTime;
+                }
+                setCurrentTime(newTime);
+                sendAudioMessage({
+                  type: 'seek',
+                  timestamp: performance.now(),
+                  data: {
+                    currentTime: newTime,
+                    previousTime: currentTime
+                  }
+                });
+              }}
+              className="h-10 w-10 md:h-12 md:w-12 text-slate-300 hover:text-white hover:bg-white/20 transition-all duration-200 ease-out active:scale-95 hover:scale-105"
+              title="Fast forward 10 seconds"
             >
-              <SkipForward className="h-4 w-4" />
+              <svg className="h-5 w-5 md:h-6 md:w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M11.933 12.8a1 1 0 000-1.6L6.6 7.2A1 1 0 005 8v8a1 1 0 001.6.8l5.333-4zM19.933 12.8a1 1 0 000-1.6l-5.333-4A1 1 0 0013 8v8a1 1 0 001.6.8l5.333-4z" />
+                <text x="12" y="20" fontSize="7" textAnchor="middle" fill="currentColor" fontWeight="bold">10</text>
+              </svg>
             </Button>
           </div>
 
-          {/* Right - Volume or Recenter */}
-          {!isTeaserMode ? (
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={toggleMute}
-              className={`h-10 w-10 transition-all duration-200 ease-out active:scale-95 ${
-                isMuted 
-                  ? 'text-red-400 hover:text-red-300 hover:bg-red-500/20'
-                  : 'text-slate-300 hover:text-white hover:bg-white/20'
-              }`}
-            >
-              {isMuted ? (
-                <VolumeX className="h-4 w-4" />
-              ) : (
-                <Volume2 className="h-4 w-4" />
-              )}
-            </Button>
-          ) : (
-            <div className="w-10"></div>
-          )}
+          {/* Right - Volume */}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={toggleMute}
+            className={`h-10 w-10 transition-all duration-200 ease-out active:scale-95 hover:scale-105 ${
+              isMuted 
+                ? 'text-red-400 hover:text-red-300 hover:bg-red-500/20'
+                : 'text-slate-300 hover:text-white hover:bg-white/20'
+            }`}
+          >
+            {isMuted ? (
+              <VolumeX className="h-4 w-4" />
+            ) : (
+              <Volume2 className="h-4 w-4" />
+            )}
+          </Button>
         </div>
       </div>
     </div>
@@ -2388,24 +2555,31 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
             </button>
           </div>
 
-          {/* Image Display Area */}
-          <div className="flex-1 relative flex items-center justify-center overflow-hidden">
+          {/* Enhanced Image Display Area with Pan/Zoom */}
+          <div 
+            ref={fullscreenContainerRef}
+            className="flex-1 relative flex items-center justify-center overflow-hidden"
+            onMouseMove={handleFullscreenMouseMove}
+            onMouseUp={handleFullscreenMouseUp}
+            onMouseLeave={handleFullscreenMouseUp}
+            onTouchMove={handleFullscreenTouchMove}
+            onTouchEnd={handleFullscreenTouchEnd}
+          >
             {track.thumbnails && track.thumbnails.length > 0 && (
               <div 
-                className="relative w-full h-full flex items-center justify-center cursor-pointer"
+                className={`relative w-full h-full flex items-center justify-center ${
+                  fullscreenZoom > 1 ? 'cursor-grab' : 'cursor-pointer'
+                } ${isPanning ? 'cursor-grabbing' : ''}`}
                 onClick={(e) => {
-                  // Don't zoom if clicking on controls
+                  // Don't zoom if clicking on controls or if we're panning
                   if (e.target !== e.currentTarget && (e.target as HTMLElement).closest('button')) {
                     return;
                   }
+                  if (isPanning) return;
                   toggleFullscreenZoom();
                 }}
-                onMouseDown={(e) => {
-                  // Prevent drag on controls
-                  if ((e.target as HTMLElement).closest('button')) {
-                    e.stopPropagation();
-                  }
-                }}
+                onMouseDown={handleFullscreenMouseDown}
+                onTouchStart={handleFullscreenTouchStart}
               >
                 {track.thumbnails && track.thumbnails[fullscreenImageIndex] && shouldShowImageSkeleton(getImageUrl(track.thumbnails[fullscreenImageIndex])) && (
                   <Skeleton className="absolute inset-0 w-full max-w-sm h-96 mx-auto" />
@@ -2413,12 +2587,15 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
                 
                 {track.thumbnails && track.thumbnails[fullscreenImageIndex] && (
                   <img
+                    ref={fullscreenImageRef}
                     src={getImageUrl(track.thumbnails[fullscreenImageIndex])}
                     alt={`${track.title} - Image ${fullscreenImageIndex + 1}`}
-                    className={`max-w-full max-h-full object-contain transition-all duration-200 ease-out ${shouldShowImageSkeleton(getImageUrl(track.thumbnails[fullscreenImageIndex])) ? 'opacity-0' : 'opacity-100'}`}
+                    className={`max-w-full max-h-full object-contain transition-all duration-200 ease-out ${shouldShowImageSkeleton(getImageUrl(track.thumbnails[fullscreenImageIndex])) ? 'opacity-0' : 'opacity-100'} ${isPanning ? 'transition-none' : ''}`}
                     style={{
-                      transform: `scale(${fullscreenZoom})`
+                      transform: `scale(${fullscreenZoom}) translate(${fullscreenPanX}px, ${fullscreenPanY}px)`,
+                      transformOrigin: 'center center'
                     }}
+                    draggable={false}
                   />
                 )}
                 
@@ -2454,6 +2631,53 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
                 {track.thumbnails.length > 1 && (
                   <div className={`absolute top-12 md:top-16 lg:top-20 right-4 md:right-6 lg:right-8 bg-black/60 backdrop-blur-sm rounded-lg px-3 py-1 text-white text-sm md:text-base ${Z_LAYERS.FULLSCREEN_CONTROLS} safe-top safe-right`}>
                     {fullscreenImageIndex + 1} / {track.thumbnails.length}
+                  </div>
+                )}
+
+                {/* Zoom Controls */}
+                <div className={`absolute top-12 md:top-16 lg:top-20 left-4 md:left-6 lg:left-8 bg-black/60 backdrop-blur-sm rounded-lg ${Z_LAYERS.FULLSCREEN_CONTROLS} safe-top safe-left`}>
+                  <div className="flex flex-col gap-2 p-2">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={zoomIn}
+                      disabled={fullscreenZoom >= 3}
+                      className="h-8 w-8 text-white hover:bg-white/20 active:bg-white/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Zoom in"
+                    >
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v6m3-3H7" />
+                      </svg>
+                    </Button>
+                    
+                    <div className="text-white text-xs text-center px-1 py-0.5">
+                      {fullscreenZoom}x
+                    </div>
+                    
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={zoomOut}
+                      disabled={fullscreenZoom <= 1}
+                      className="h-8 w-8 text-white hover:bg-white/20 active:bg-white/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Zoom out"
+                    >
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM7 10h6" />
+                      </svg>
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Pan Instructions (shown when zoomed in) */}
+                {fullscreenZoom > 1 && (
+                  <div className={`absolute bottom-20 md:bottom-24 left-1/2 transform -translate-x-1/2 bg-black/60 backdrop-blur-sm rounded-lg px-3 py-2 text-white text-sm ${Z_LAYERS.FULLSCREEN_CONTROLS} pointer-events-none`}>
+                    <div className="flex items-center gap-2">
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                      </svg>
+                      <span>Drag to pan • Tap to zoom</span>
+                    </div>
                   </div>
                 )}
               </div>
@@ -2522,8 +2746,8 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
       
             {/* XR Scene - Always present when initialized for seamless toggling */}
       {xrSceneInitialized && track.isXR && (
-        <div className={`fixed inset-0 ${Z_LAYERS.XR_BACKGROUND} transition-opacity duration-300 ${
-          xrSceneVisible ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+        <div className={`fixed inset-0 ${Z_LAYERS.XR_BACKGROUND} transition-all duration-500 ease-in-out ${
+          xrSceneVisible ? 'opacity-100 pointer-events-auto scale-100' : 'opacity-0 pointer-events-none scale-105'
         }`}>
           <XRScene 
             isPlaying={isPlaying}
@@ -2652,7 +2876,7 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
           <div className="flex-1 flex items-center justify-center overflow-hidden">
             {!showPlaylist ? (
               // Album Cover/Image Slideshow
-              <div className="w-full h-full flex items-center justify-center px-0 py-0">
+              <div className="w-full h-full flex items-center justify-center px-4 py-4 md:px-6 md:py-6 lg:px-8 lg:py-8">
                 {/* Use ImageSlider component instead of custom implementation */}
                 <ImageSlider
                   images={Array.isArray(track.thumbnails) 
@@ -2662,7 +2886,7 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
                   showDescriptions={true}
                   onSlideChange={(index) => setCurrentThumbnailIndex(index)}
                   onFullscreenChange={(isFullscreen) => setIsFullscreenMode(isFullscreen)}
-                  className="w-full h-full"
+                  className="w-full h-full max-h-[70vh]"
                   autoplay={true}
                   defaultInterval={20}
                   allowVerticalCrop={true}
@@ -2809,51 +3033,87 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
                   <Button
                     variant="ghost"
                     size="icon"
-                    onClick={previousTrack}
+                    onClick={() => {
+                      const newTime = Math.max(0, currentTime - 10);
+                      if (audioRef.current) {
+                        audioRef.current.currentTime = newTime;
+                      }
+                      setCurrentTime(newTime);
+                      sendAudioMessage({
+                        type: 'seek',
+                        timestamp: performance.now(),
+                        data: {
+                          currentTime: newTime,
+                          previousTime: currentTime
+                        }
+                      });
+                    }}
                     disabled={isTeaserMode}
-                    className={`h-14 w-14 transition-all duration-200 ease-out active:scale-95 ${
+                    className={`h-12 w-12 md:h-14 md:w-14 transition-all duration-200 ease-out active:scale-95 hover:scale-105 ${
                       isTeaserMode 
                         ? 'text-slate-500 cursor-not-allowed opacity-50'
                         : 'text-slate-300 hover:text-white hover:bg-white/20'
                     }`}
-                    aria-label="Previous track"
+                    aria-label="Rewind 10 seconds"
                     aria-disabled={isTeaserMode}
                     tabIndex={isTeaserMode ? -1 : 0}
+                    title="Rewind 10 seconds"
                   >
-                    <SkipBack className="h-6 w-6" aria-hidden="true" />
+                    <svg className="h-6 w-6 md:h-7 md:w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12.066 11.2a1 1 0 000 1.6l5.334 4A1 1 0 0019 16V8a1 1 0 00-1.6-.8l-5.334 4zM4.066 11.2a1 1 0 000 1.6l5.334 4A1 1 0 0011 16V8a1 1 0 00-1.6-.8l-5.334 4z" />
+                      <text x="12" y="20" fontSize="7" textAnchor="middle" fill="currentColor" fontWeight="bold">10</text>
+                    </svg>
                   </Button>
 
                   <Button
                     onClick={togglePlay}
                     size="icon"
-                    className="h-16 w-16 bg-white hover:bg-slate-100 active:bg-slate-200 text-slate-900 rounded-full transition-all duration-200 ease-out active:scale-95 hover:scale-105 shadow-lg"
+                    className="h-14 w-14 md:h-16 md:w-16 bg-white hover:bg-slate-100 active:bg-slate-200 text-slate-900 rounded-full transition-all duration-200 ease-out active:scale-95 hover:scale-105 shadow-lg"
                     aria-label={isPlaying ? "Pause audio" : "Play audio"}
                     aria-pressed={isPlaying}
                     role="button"
                     tabIndex={0}
                   >
                     {isPlaying ? (
-                      <Pause className="h-7 w-7" aria-hidden="true" />
+                      <Pause className="h-6 w-6 md:h-7 md:w-7" aria-hidden="true" />
                     ) : (
-                      <Play className="h-7 w-7 ml-0.5" aria-hidden="true" />
+                      <Play className="h-6 w-6 md:h-7 md:w-7 ml-0.5" aria-hidden="true" />
                     )}
                   </Button>
 
                   <Button
                     variant="ghost"
                     size="icon"
-                    onClick={nextTrack}
+                    onClick={() => {
+                      const newTime = Math.min(duration, currentTime + 10);
+                      if (audioRef.current) {
+                        audioRef.current.currentTime = newTime;
+                      }
+                      setCurrentTime(newTime);
+                      sendAudioMessage({
+                        type: 'seek',
+                        timestamp: performance.now(),
+                        data: {
+                          currentTime: newTime,
+                          previousTime: currentTime
+                        }
+                      });
+                    }}
                     disabled={isTeaserMode}
-                    className={`h-14 w-14 transition-all duration-200 ease-out active:scale-95 ${
+                    className={`h-12 w-12 md:h-14 md:w-14 transition-all duration-200 ease-out active:scale-95 hover:scale-105 ${
                       isTeaserMode 
                         ? 'text-slate-500 cursor-not-allowed opacity-50'
                         : 'text-slate-300 hover:text-white hover:bg-white/20'
                     }`}
-                    aria-label="Next track"
+                    aria-label="Fast forward 10 seconds"
                     aria-disabled={isTeaserMode}
                     tabIndex={isTeaserMode ? -1 : 0}
+                    title="Fast forward 10 seconds"
                   >
-                    <SkipForward className="h-6 w-6" aria-hidden="true" />
+                    <svg className="h-6 w-6 md:h-7 md:w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M11.933 12.8a1 1 0 000-1.6L6.6 7.2A1 1 0 005 8v8a1 1 0 001.6.8l5.333-4zM19.933 12.8a1 1 0 000-1.6l-5.333-4A1 1 0 0013 8v8a1 1 0 001.6.8l5.333-4z" />
+                      <text x="12" y="20" fontSize="7" textAnchor="middle" fill="currentColor" fontWeight="bold">10</text>
+                    </svg>
                   </Button>
                 </div>
 
@@ -2886,7 +3146,19 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
                     {isXRLoading ? (
                       <Loader2 className="h-5 w-5 animate-spin" />
                     ) : (
-                      <Glasses className="h-5 w-5" />
+                      <Glasses className={`h-5 w-5 ${
+                        track.xrSrc && xrSceneReady && videosphereMaterialReady && !isXRLoading
+                          ? 'animate-pulse opacity-75'
+                          : ''
+                      }`} 
+                      style={
+                        track.xrSrc && xrSceneReady && videosphereMaterialReady && !isXRLoading
+                          ? {
+                              animation: 'subtle-pulse 3s ease-in-out infinite',
+                              animationDelay: '0.5s'
+                            }
+                          : {}
+                      } />
                     )}
                   </Button>
                 ) : (
@@ -2910,6 +3182,135 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
             </div>
           </div>
         </>
+      )}
+
+      {/* Playlist Overlay - Enhanced with scale-in animation */}
+      {showPlaylist && (
+        <div 
+          className={`fixed inset-0 bg-black/60 backdrop-blur-sm ${Z_LAYERS.OVERLAY_LOW} flex items-center justify-center p-4 animate-in fade-in-0 duration-300`}
+          onClick={() => setShowPlaylist(false)}
+        >
+          <div 
+            className="bg-slate-900/95 backdrop-blur-sm rounded-xl p-6 max-w-md w-full max-h-[70vh] border border-slate-600/50 shadow-2xl animate-in zoom-in-95 duration-300 ease-out"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-white text-xl font-semibold">Playlist</h2>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setShowPlaylist(false)}
+                className="h-8 w-8 text-slate-400 hover:text-white hover:bg-slate-700/60 transition-all duration-200 ease-out active:scale-95"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+            
+            <ScrollArea className="flex-1 pr-4">
+              <div className="space-y-2">
+                {tracks.map((t, i) => (
+                  <div 
+                    key={t.id}
+                    className={`group flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-all duration-200 ease-out ${
+                      i === currentTrack
+                        ? 'bg-white/10 backdrop-blur-sm shadow-md scale-[1.02]'
+                        : 'hover:bg-white/5 active:bg-white/10 hover:scale-[1.01] active:scale-[0.99]'
+                    }`}
+                    onClick={() => selectTrack(i)}
+                  >
+                    {/* Track Number or Playing Indicator - Enhanced */}
+                    <div className="flex-shrink-0 w-8 h-8 flex items-center justify-center">
+                      {i === currentTrack ? (
+                        <div className={`${isPlaying ? 'block' : 'hidden'} w-4 h-4`}>
+                          <span className="block w-1 h-4 bg-blue-500 mr-0.5 animate-bar1 float-left"></span>
+                          <span className="block w-1 h-4 bg-blue-500 mr-0.5 animate-bar2 float-left"></span>
+                          <span className="block w-1 h-4 bg-blue-500 animate-bar3 float-left"></span>
+                        </div>
+                      ) : (
+                        <span className="text-base text-slate-400 group-hover:text-white font-medium transition-colors duration-200">
+                          {i + 1}
+                        </span>
+                      )}
+                    </div>
+                   
+                    {/* Track Thumbnail - Enhanced */}
+                    <div className="flex-shrink-0 w-12 h-12 rounded-lg overflow-hidden bg-slate-700/60 group-hover:scale-105 transition-transform duration-200">
+                      {t.thumbnails && t.thumbnails.length > 0 ? (
+                        <img
+                          src={getImageUrl(t.thumbnails[0])}
+                          alt={t.title}
+                          className="w-full h-full object-cover transition-all duration-200 group-hover:brightness-110"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <AudioWaveform className="h-5 w-5 text-slate-500" />
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* Track Details - Enhanced */}
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-medium text-white truncate group-hover:text-blue-300 transition-colors duration-200">
+                        {t.title}
+                      </h3>
+                      <p className="text-sm text-slate-400 truncate group-hover:text-slate-300 transition-colors duration-200">
+                        {t.artist}
+                      </p>
+                    </div>
+                    
+                    {/* Track Duration - Enhanced */}
+                    <div className="flex-shrink-0 text-xs text-slate-400 group-hover:text-slate-300 transition-colors duration-200">
+                      {formatTime(t.duration)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
+          </div>
+        </div>
+      )}
+
+      {/* Teaser Overlay - Enhanced with scale-in animation */}
+      {showTeaser && (
+        <div 
+          className={`fixed inset-0 bg-black/80 backdrop-blur-sm ${Z_LAYERS.TEASER_OVERLAY} flex items-center justify-center p-4 animate-in fade-in-0 duration-300`}
+          onClick={handleTeaserOverlayClick}
+        >
+          <div className="bg-slate-900/95 backdrop-blur-sm rounded-xl p-6 max-w-sm w-full border border-slate-600/50 shadow-2xl animate-in zoom-in-95 duration-300 ease-out">
+            <div className="text-center mb-4">
+              <div className="w-16 h-16 bg-purple-600/20 rounded-full flex items-center justify-center mx-auto mb-3">
+                <ExternalLink className="h-8 w-8 text-purple-400" />
+              </div>
+              <h2 className="text-white text-xl font-semibold mb-2">Enjoying the Preview?</h2>
+              <p className="text-slate-300 text-sm leading-relaxed">
+                You're experiencing a free preview of this immersive audio tour. 
+                Get full access to continue your journey with complete chapters and exclusive content.
+              </p>
+            </div>
+            
+            <div className="space-y-2">
+              <Button 
+                onClick={openTeaserLink} 
+                className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 active:from-blue-800 active:to-purple-800 text-white h-10 rounded-lg transition-all duration-200 ease-out active:scale-95 hover:scale-105 border-0 text-sm shadow-lg"
+              >
+                <ExternalLink className="h-3 w-3 mr-2" />
+                Get Full Tour Access
+              </Button>
+              
+              <Button 
+                variant="ghost" 
+                onClick={() => setShowTeaser(false)} 
+                className="w-full text-white hover:bg-white/10 active:bg-white/20 h-8 transition-all duration-200 ease-out active:scale-95 text-sm"
+              >
+                Continue Preview
+              </Button>
+            </div>
+            
+            <p className="text-slate-500 text-xs mt-3 text-center">
+              Preview mode - Limited to one experience
+            </p>
+          </div>
+        </div>
       )}
     </div>
   );
