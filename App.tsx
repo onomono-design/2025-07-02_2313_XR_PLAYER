@@ -370,6 +370,7 @@ export default function App() {
                 }
                 isTeaserMode={isTeaserMode}
                 teaserPreloading={teaserPreloading}
+                developerConfig={developerConfig || undefined}
               />
             </div>
 

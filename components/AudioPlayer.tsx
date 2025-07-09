@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { Card, CardContent } from './ui/card';
 import { Button } from './ui/button';
 import { ScrollArea } from './ui/scroll-area';
 import { Badge } from './ui/badge';
@@ -6,6 +7,7 @@ import { Skeleton } from './ui/skeleton';
 import { XRScene } from './XRScene';
 import { ImageSlider } from './ImageSlider';
 import { AudioSlider } from './ui/audio-slider';
+import { DeveloperConfigSelection } from './DeveloperConfig';
 import { 
   Play, 
   Pause, 
@@ -223,6 +225,7 @@ interface AudioPlayerProps {
   deviceOrientationPermission?: DeviceOrientationPermissionState;
   isTeaserMode?: boolean;
   teaserPreloading?: boolean;
+  developerConfig?: DeveloperConfigSelection;
 }
 
 // Enhanced configuration with teaser-specific content
@@ -331,7 +334,7 @@ const teaserTourConfig: TourConfig = {
   }
 };
 
-export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTeaserMode = false, teaserPreloading = false }: AudioPlayerProps) {
+export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTeaserMode = false, teaserPreloading = false, developerConfig }: AudioPlayerProps) {
   // Audio state
   const [tracks, setTracks] = useState<Track[]>([]);
   const [currentTrack, setCurrentTrack] = useState(0);
@@ -1030,18 +1033,86 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
     }
   };
 
+  // Convert developer config to tour config format
+  const convertDeveloperConfigToTourConfig = (devConfig: DeveloperConfigSelection): TourConfig => {
+    if (!devConfig.mediaData) {
+      // Fallback to default configuration if no media data
+      return isTeaserMode ? teaserTourConfig : defaultTourConfig;
+    }
+
+    if (devConfig.mode === 'teaser') {
+      // Convert teaser data to tour config
+      const teaserData = devConfig.mediaData;
+      return {
+        tour: {
+          tourName: teaserData.title || 'Tour Preview',
+          description: teaserData.description || 'Experience a preview of this tour',
+          totalChapters: 1,
+          chapters: [
+            {
+              chapterName: teaserData.title || 'Preview',
+              chapterOrder: 1,
+              tourName: teaserData.title || 'Tour Preview',
+              chapterScript: teaserData.description || 'Experience a preview of this tour',
+              audio_src: teaserData.audio_src || '',
+              isXR: !!teaserData.video_src,
+              xr_src: teaserData.video_src || '',
+              thumbnail: teaserData.thumbnails || [],
+              isTeaser: true,
+              outroCTA_timeIn: Math.floor(teaserData.duration - 1).toString().padStart(2, '0') + ':00',
+              outroCTA_backlink: 'https://example.com/full-tour-purchase'
+            }
+          ]
+        }
+      };
+    } else {
+      // Convert full tour data to tour config
+      const fullTourData = devConfig.mediaData;
+      const chapters = fullTourData.chapters?.map((chapter: any, index: number) => ({
+        chapterName: chapter.title || `Chapter ${index + 1}`,
+        chapterOrder: index + 1,
+        tourName: chapter.title || `Chapter ${index + 1}`,
+        chapterScript: chapter.description || '',
+        audio_src: chapter.audio_src || '',
+        isXR: !!chapter.video_src,
+        xr_src: chapter.video_src || '',
+        thumbnail: chapter.thumbnails || [],
+        isTeaser: false,
+        outroCTA_timeIn: '',
+        outroCTA_backlink: ''
+      })) || [];
+
+      return {
+        tour: {
+          tourName: `Full Tour Experience`,
+          description: `Complete tour experience`,
+          totalChapters: chapters.length,
+          chapters
+        }
+      };
+    }
+  };
+
   // Load tour configuration (teaser or full) - removed artificial delay
   useEffect(() => {
     const loadTourConfig = () => {
-      // Use teaser config if in teaser mode
-      const configToUse = isTeaserMode ? teaserTourConfig : defaultTourConfig;
-      setTourConfig(configToUse);
+      let configToUse: TourConfig;
       
-      console.log(`🎵 Loaded ${isTeaserMode ? 'teaser' : 'full tour'} configuration`);
+      if (developerConfig && developerConfig.isValid && developerConfig.mediaData) {
+        // Use developer configuration
+        configToUse = convertDeveloperConfigToTourConfig(developerConfig);
+        console.log(`🎵 Loaded ${isTeaserMode ? 'teaser' : 'full tour'} configuration from developer config:`, configToUse);
+      } else {
+        // Fallback to default configuration
+        configToUse = isTeaserMode ? teaserTourConfig : defaultTourConfig;
+        console.log(`🎵 Loaded ${isTeaserMode ? 'teaser' : 'full tour'} configuration (fallback)`);
+      }
+      
+      setTourConfig(configToUse);
     };
 
     loadTourConfig();
-  }, [isTeaserMode]);
+  }, [isTeaserMode, developerConfig]);
 
   // Convert tracks when config loads and ensure slider starts at index 0
   useEffect(() => {
