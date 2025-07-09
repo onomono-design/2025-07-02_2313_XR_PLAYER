@@ -184,10 +184,10 @@ export function DeveloperConfig({ onConfigurationComplete }: DeveloperConfigProp
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4 md:p-6">
-      <div className="max-w-4xl mx-auto">
-        {/* Header */}
-        <div className="text-center mb-6 md:mb-8">
+    <div className="h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col max-w-4xl mx-auto w-full">
+        {/* Header - Fixed size */}
+        <div className="flex-shrink-0 text-center p-4 md:p-6">
           <div className="flex items-center justify-center gap-3 mb-4">
             <div className="p-3 bg-blue-600/20 rounded-lg">
               <Settings className="h-6 w-6 text-blue-400" />
@@ -205,8 +205,10 @@ export function DeveloperConfig({ onConfigurationComplete }: DeveloperConfigProp
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
-                      {/* Configuration Panel */}
+        {/* Content - Scrollable */}
+        <div className="flex-1 overflow-y-auto px-4 md:px-6 pb-4 md:pb-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
+            {/* Configuration Panel */}
             <div className="space-y-4 md:space-y-6">
               {/* Tour Location Selection */}
               <Card className="bg-slate-800 border-slate-700">
@@ -334,8 +336,8 @@ export function DeveloperConfig({ onConfigurationComplete }: DeveloperConfigProp
               )}
           </div>
 
-          {/* Configuration Preview */}
-          <div className="space-y-4 md:space-y-6">
+            {/* Configuration Preview */}
+            <div className="space-y-4 md:space-y-6">
             {/* Current Configuration Status */}
             <Card className="bg-slate-800 border-slate-700">
               <CardHeader className="pb-3 md:pb-6">
@@ -497,6 +499,7 @@ export function DeveloperConfig({ onConfigurationComplete }: DeveloperConfigProp
                 )}
               </CardContent>
             </Card>
+            </div>
           </div>
         </div>
       </div>

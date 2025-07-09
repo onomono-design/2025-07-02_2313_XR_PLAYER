@@ -174,14 +174,24 @@ export default function App() {
     setIsTeaserMode(config.mode === 'teaser');
     setShowDeveloperConfig(false);
     
-    // If valid configuration, start preloading
+    // Ensure landing page is visible after configuration
+    setShowLandingPage(true);
+    
+    // If valid configuration, start preloading and ensure landing page is properly managed
     if (config.isValid) {
       setTeaserPreloading(true);
+      // Set preloaded to true immediately to enable buttons
+      setTeaserPreloaded(true);
       setTimeout(() => {
-        setTeaserPreloaded(true);
         setTeaserPreloading(false);
       }, 1000);
+    } else {
+      // If configuration is invalid, still show landing page but with disabled buttons
+      setTeaserPreloaded(false);
+      setTeaserPreloading(false);
     }
+    
+    console.log('🔧 Developer config complete - showLandingPage:', true, 'showDeveloperConfig:', false);
   }, []);
 
   // Handle audio sync messages from AudioPlayer with mode-aware logging
@@ -334,22 +344,36 @@ export default function App() {
     [],
   );
 
-  // Start teaser preloading immediately when app mounts
+  // Start teaser preloading immediately when app mounts (only if not in developer mode and no developer config)
   useEffect(() => {
-    console.log("🎯 App initialized - starting teaser preloading");
+    console.log("🎯 App initialized - checking if teaser preloading is needed");
     
-    // Start preloading teaser content in background
-    const startTeaserPreload = () => {
-      console.log("🎬 [PRELOAD] Starting teaser preload in background...");
-      setTeaserPreloading(true);
-      // The AudioPlayer will be mounted with preload mode to handle this
-    };
-    
-    // Small delay to ensure DOM is ready
-    const preloadTimer = setTimeout(startTeaserPreload, 100);
-    
-    return () => clearTimeout(preloadTimer);
-  }, []);
+    // Only start preloading if we're not showing developer config AND we don't have a developer config
+    if (!showDeveloperConfig && !developerConfig) {
+      const startTeaserPreload = () => {
+        console.log("🎬 [PRELOAD] Starting teaser preload in background...");
+        setTeaserPreloading(true);
+        // The AudioPlayer will be mounted with preload mode to handle this
+      };
+      
+      // Small delay to ensure DOM is ready
+      const preloadTimer = setTimeout(startTeaserPreload, 100);
+      
+      return () => clearTimeout(preloadTimer);
+    }
+  }, [showDeveloperConfig, developerConfig]);
+
+  // Debug logging in development mode only
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('🔍 Render states:', {
+      showDeveloperConfig,
+      showLandingPage,
+      isTeaserMode,
+      teaserPreloaded,
+      teaserPreloading,
+      developerConfigValid: developerConfig?.isValid
+    });
+  }
 
   return (
     <div className={`dark viewport-fit bg-gradient-to-br from-slate-900 to-slate-800 ${APP_Z_LAYERS.BACKGROUND} overflow-hidden fixed inset-0 mobile-optimized`}>
@@ -464,7 +488,7 @@ export default function App() {
                   {/* Free Preview Button */}
                   <Button
                     onClick={() => handleGetStarted(true)}
-                    disabled={teaserPreloading || !teaserPreloaded}
+                    disabled={teaserPreloading || (!teaserPreloaded && !developerConfig) || (developerConfig ? !developerConfig.isValid : false)}
                     className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 active:from-blue-800 active:to-purple-800 disabled:from-slate-600 disabled:to-slate-700 disabled:cursor-not-allowed disabled:opacity-75 text-white h-11 sm:h-12 rounded-xl transition-all duration-200 ease-out active:scale-95 hover:scale-[1.02] disabled:hover:scale-100 disabled:active:scale-100 border-0 text-sm sm:text-base"
                   >
                     <div className="flex items-center gap-2">
@@ -473,7 +497,7 @@ export default function App() {
                           <Loader2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 animate-spin" />
                           Loading Preview...
                         </>
-                      ) : teaserPreloaded ? (
+                      ) : (teaserPreloaded || developerConfig) ? (
                         <>
                           <Play className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                           Try Free Preview
@@ -490,15 +514,22 @@ export default function App() {
                   {/* Full Tour Button */}
                   <Button
                     onClick={() => handleGetStarted(false)}
-                    className="w-full bg-white hover:bg-slate-100 active:bg-slate-200 text-slate-900 h-11 sm:h-12 rounded-xl transition-all duration-200 ease-out active:scale-95 hover:scale-[1.02] text-sm sm:text-base"
+                    disabled={developerConfig ? !developerConfig.isValid : false}
+                    className="w-full bg-white hover:bg-slate-100 active:bg-slate-200 disabled:bg-slate-600 disabled:text-slate-400 disabled:cursor-not-allowed disabled:opacity-75 text-slate-900 h-11 sm:h-12 rounded-xl transition-all duration-200 ease-out active:scale-95 hover:scale-[1.02] disabled:hover:scale-100 disabled:active:scale-100 text-sm sm:text-base"
                   >
                     Start Full Tour
                   </Button>
 
-                  {/* Enhanced disclaimer - More compact */}
-                  <p className="text-slate-500 text-xs text-center leading-relaxed px-2">
-                    Best experienced with headphones. XR features will request device permissions when needed.
-                  </p>
+                  {/* Enhanced disclaimer or configuration status - More compact */}
+                  {developerConfig && !developerConfig.isValid ? (
+                    <p className="text-red-400 text-xs text-center leading-relaxed px-2">
+                      Invalid configuration: Media not available for selected options. Please check developer settings.
+                    </p>
+                  ) : (
+                    <p className="text-slate-500 text-xs text-center leading-relaxed px-2">
+                      Best experienced with headphones. XR features will request device permissions when needed.
+                    </p>
+                  )}
                 </div>
               </div>
 

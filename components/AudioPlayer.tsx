@@ -485,7 +485,7 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
         }
       }
     }
-  }, [isTeaserMode, videosphereMaterialReady, sendAudioMessage]);
+  }, [isTeaserMode, videosphereMaterialReady]);
 
   // Videosphere material ready callback - Auto-play audio immediately when ready in teaser mode
   const handleVideosphereMaterialReady = useCallback(() => {
@@ -537,7 +537,7 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
         }
       }
     }
-  }, [isTeaserMode, xrSceneReady, sendAudioMessage]);
+  }, [isTeaserMode, xrSceneReady]);
 
   // Handle seek requests from XR viewer
   const handleXRViewerSeek = useCallback((time: number) => {
@@ -556,7 +556,7 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
         previousTime: currentTime
       }
     });
-  }, [currentTime, sendAudioMessage]);
+  }, [currentTime]);
 
   // XR Scene initialization - REMOVED: this was bypassing the iframe ready callback
   // The XR scene ready state should ONLY be set when the iframe sends the 'ready' message
@@ -575,7 +575,7 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
         data: deviceOrientationPermission
       });
     }
-  }, [deviceOrientationPermission, sendAudioMessage, onAudioMessage]);
+  }, [deviceOrientationPermission, onAudioMessage]);
 
 
 
@@ -593,21 +593,16 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
   // Auto-start XR mode when in teaser mode
   useEffect(() => {
     if (isTeaserMode && tracks.length > 0 && !isXRLoading && !isXRMode) {
-      console.log('🎬 Auto-starting XR mode for teaser', {
-        tracks: tracks.length,
-        currentTrack,
-        trackTitle: tracks[currentTrack]?.title,
-        xrSrc: tracks[currentTrack]?.xrSrc
-      });
+      console.log('🎬 Auto-starting XR mode for teaser');
       
       setIsXRLoading(true);
-      setXRSceneReady(false); // Reset scene ready state
-      setVideosphereMaterialReady(false); // Reset videosphere material ready state
-      hasAutoPlayedTeaser.current = false; // Reset auto-play flag for new session
+      setXRSceneReady(false);
+      setVideosphereMaterialReady(false);
+      hasAutoPlayedTeaser.current = false;
       
-      // Activate XR mode immediately (removed artificial delay)
+      // Activate XR mode immediately
       setIsXRMode(true);
-      setXRSceneVisible(true); // Make XR scene visible
+      setXRSceneVisible(true);
       
       // Send XR mode change message
       sendAudioMessage({
@@ -624,19 +619,14 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
         }
       });
       
-      console.log('🎬 XR mode change message sent - scene will auto-play when ready');
-      
-      // Fallback timeout to clear loading state if scene doesn't respond
+      // Fallback timeout to clear loading state
       setTimeout(() => {
         if (isXRLoading && isTeaserMode) {
-          console.warn('🎬 Teaser XR scene loading timeout - forcing ready states and auto-play');
+          console.warn('🎬 Teaser XR scene loading timeout - forcing ready states');
           setIsXRLoading(false);
-          
-          // Force both ready states on timeout
           setXRSceneReady(true);
           setVideosphereMaterialReady(true);
           
-          // Send ready message manually
           sendAudioMessage({
             type: 'xr-scene-fully-ready',
             timestamp: performance.now(),
@@ -647,42 +637,32 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
             }
           });
           
-          // Auto-play on timeout in teaser mode (user clicked preview = consent)
+          // Auto-play on timeout in teaser mode
           if (audioRef.current && !hasAutoPlayedTeaser.current) {
             hasAutoPlayedTeaser.current = true;
-            console.log('🎬 Auto-playing teaser after timeout - user consent already given');
             
-            const playPromise = audioRef.current.play();
-            if (playPromise !== undefined) {
-              playPromise
-                .then(() => {
-                  setIsPlaying(true);
-                  console.log('🎬 ✅ Timeout auto-play successful for teaser mode');
-                  
-                  // Send playback state message
-                  sendAudioMessage({
-                    type: 'playback-state',
-                    timestamp: performance.now(),
-                    data: {
-                      isPlaying: true,
-                      currentTime: audioRef.current?.currentTime || 0,
-                      duration: audioRef.current?.duration || 0
-                    }
-                  });
-                })
-                .catch((error) => {
-                  console.warn('🎬 ⚠️ Timeout auto-play failed:', error);
-                  setIsPlaying(false);
-                  hasAutoPlayedTeaser.current = false;
+            audioRef.current.play()
+              .then(() => {
+                setIsPlaying(true);
+                sendAudioMessage({
+                  type: 'playback-state',
+                  timestamp: performance.now(),
+                  data: {
+                    isPlaying: true,
+                    currentTime: audioRef.current?.currentTime || 0,
+                    duration: audioRef.current?.duration || 0
+                  }
                 });
-            }
+              })
+              .catch(() => {
+                setIsPlaying(false);
+                hasAutoPlayedTeaser.current = false;
+              });
           }
-          
-          console.log('🎬 Forced XR scene ready state and attempted auto-play');
         }
-      }, 6000); // Reduced to 6 seconds for faster recovery
+      }, 6000);
     }
-  }, [isTeaserMode, tracks.length, isXRLoading, isXRMode, sendAudioMessage, deviceOrientationPermission, currentTrack]);
+  }, [isTeaserMode, tracks.length, isXRLoading, isXRMode, deviceOrientationPermission, currentTrack, sendAudioMessage]);
 
   // Send XR scene initialization when XR mode loads
   useEffect(() => {
@@ -699,39 +679,32 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
     const detectDeviceCapabilities = () => {
       const userAgent = navigator.userAgent;
       
-      // Enhanced mobile device detection with specific browser identification
+      // Mobile device detection
       const isMobile = /Mobi|Android|iPhone|iPad|iPod|BlackBerry|Opera Mini/i.test(userAgent);
-              const isIOSSafari = /iPad|iPhone|iPod/.test(userAgent) && !(window as any).MSStream;
+      const isIOSSafari = /iPad|iPhone|iPod/.test(userAgent) && !(window as any).MSStream;
       const isAndroidChrome = /Android/.test(userAgent) && /Chrome/.test(userAgent);
-      const isAndroidFirefox = /Android/.test(userAgent) && /Firefox/.test(userAgent);
-      const isIOSChrome = /iPad|iPhone|iPod/.test(userAgent) && /CriOS/.test(userAgent);
-      const isIOSFirefox = /iPad|iPhone|iPod/.test(userAgent) && /FxiOS/.test(userAgent);
       
       setIsMobileDevice(isMobile);
       
-      // Enhanced low-end device detection
+      // Low-end device detection
       const isLowEnd = (
         navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4
       ) || (
         'deviceMemory' in navigator && (navigator as any).deviceMemory <= 4
       ) || (
-        // Additional heuristics for older devices
         /Android [1-4]\./.test(userAgent) ||
-        /iPhone OS [1-9]_/.test(userAgent) ||
-        /iPad.*OS [1-9]_/.test(userAgent)
+        /iPhone OS [1-9]_/.test(userAgent)
       );
       setIsLowEndDevice(!!isLowEnd);
       
-      // Enhanced network quality detection with more granular assessment
+      // Network quality detection
       if ('connection' in navigator) {
         const connection = (navigator as any).connection;
         if (connection) {
           const effectiveType = connection.effectiveType;
-          const downlink = connection.downlink; // Mbps
-          const rtt = connection.rtt; // Round-trip time in ms
+          const downlink = connection.downlink;
           
-          // More sophisticated network quality assessment
-          if (effectiveType === '4g' && downlink > 10 && rtt < 100) {
+          if (effectiveType === '4g' && downlink > 5) {
             setNetworkQuality('fast');
           } else if (effectiveType === '4g' || effectiveType === '3g') {
             setNetworkQuality(downlink < 2 ? 'slow' : 'fast');
@@ -739,31 +712,24 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
             setNetworkQuality('slow');
           }
           
-          // Listen for network changes with debouncing
-          let networkChangeTimeout: NodeJS.Timeout;
-          const handleNetworkChange = () => {
-            clearTimeout(networkChangeTimeout);
-            networkChangeTimeout = setTimeout(() => {
-              const newType = connection.effectiveType;
-              const newDownlink = connection.downlink;
-              
-              if (newType === '4g' && newDownlink > 10) {
-                setNetworkQuality('fast');
-              } else if (newType === '4g' || newType === '3g') {
-                setNetworkQuality(newDownlink < 2 ? 'slow' : 'fast');
-              } else {
-                setNetworkQuality('slow');
-              }
-            }, 1000); // Debounce network changes
-          };
-          
-          connection.addEventListener('change', handleNetworkChange);
+          connection.addEventListener('change', () => {
+            const newType = connection.effectiveType;
+            const newDownlink = connection.downlink;
+            
+            if (newType === '4g' && newDownlink > 5) {
+              setNetworkQuality('fast');
+            } else if (newType === '4g' || newType === '3g') {
+              setNetworkQuality(newDownlink < 2 ? 'slow' : 'fast');
+            } else {
+              setNetworkQuality('slow');
+            }
+          });
         }
       }
       
-      // Apply browser-specific optimizations and touch handling
+      // Apply optimizations for mobile
       if (isMobile) {
-        // Prevent zoom on iOS Safari
+        // iOS Safari optimizations
         if (isIOSSafari) {
           const metaViewport = document.querySelector('meta[name="viewport"]');
           if (metaViewport) {
@@ -771,41 +737,18 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
               'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover'
             );
           }
-          
-          // Disable iOS bounce scrolling globally
-          document.documentElement.style.setProperty('-webkit-overflow-scrolling', 'touch');
           document.documentElement.style.setProperty('overscroll-behavior', 'none');
         }
         
         // Android Chrome optimizations
         if (isAndroidChrome) {
-          // Improve touch responsiveness
           document.documentElement.style.setProperty('touch-action', 'manipulation');
-          
-          // Prevent address bar hiding issues
-          document.documentElement.style.setProperty('height', '100%');
-          document.body.style.setProperty('height', '100%');
         }
         
         // General mobile optimizations
         document.documentElement.style.setProperty('-webkit-tap-highlight-color', 'transparent');
-        document.documentElement.style.setProperty('-webkit-touch-callout', 'none');
-        document.documentElement.style.setProperty('-webkit-user-select', 'none');
         document.documentElement.style.setProperty('user-select', 'none');
       }
-      
-      console.log('📱 Enhanced device capabilities:', { 
-        isMobile, 
-        isLowEnd, 
-        isIOSSafari,
-        isAndroidChrome,
-        isAndroidFirefox,
-        isIOSChrome,
-        isIOSFirefox,
-        hardwareConcurrency: navigator.hardwareConcurrency,
-        deviceMemory: (navigator as any).deviceMemory,
-        userAgent: userAgent.substring(0, 50) + '...'
-      });
     };
 
     detectDeviceCapabilities();
@@ -1205,7 +1148,7 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
      const preloadTimer = setTimeout(preloadTeaser, 200);
      
      return () => clearTimeout(preloadTimer);
-   }, [teaserPreloading, isTeaserMode, onAudioMessage, sendAudioMessage]);
+   }, [teaserPreloading, isTeaserMode, onAudioMessage]);
 
   // Send init message when tracks are loaded and first track is ready
   useEffect(() => {
@@ -1229,7 +1172,7 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
         }
       });
     }
-  }, [tracks, sendAudioMessage, currentTrack, currentTime, duration, isPlaying, isMuted, onAudioMessage, deviceOrientationPermission]);
+  }, [tracks, currentTrack, currentTime, duration, isPlaying, isMuted, onAudioMessage, deviceOrientationPermission]);
 
   // Send regular time updates when playing
   useEffect(() => {
@@ -1248,7 +1191,7 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
     }, 100); // 10fps updates for smooth sync
     
     return () => clearInterval(interval);
-  }, [isPlaying, currentTime, duration, sendAudioMessage, onAudioMessage]);
+  }, [isPlaying, currentTime, duration, onAudioMessage]);
 
   // Enhanced preloading for current, previous, and next tracks
   useEffect(() => {

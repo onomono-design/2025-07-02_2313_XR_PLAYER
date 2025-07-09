@@ -168,8 +168,6 @@ export function XRScene({
         ...data
       };
       
-      console.log('🎯 Sending message to iframe:', { type, data });
-      
       try {
         iframeRef.current.contentWindow.postMessage(message, '*');
       } catch (error) {
@@ -177,12 +175,7 @@ export function XRScene({
         setViewerError('Communication error with 360° viewer');
       }
     } else {
-      console.warn('🎯 Cannot send message - iframe not available:', { 
-        hasIframe: !!iframeRef.current,
-        hasContentWindow: !!iframeRef.current?.contentWindow,
-        type,
-        data
-      });
+      console.warn('🎯 Cannot send message - iframe not available');
     }
   }, []);
 
@@ -745,17 +738,18 @@ export function XRScene({
 
   // Construct iframe URL - always load the headless viewer
   const getViewerUrl = () => {
-    // Always build URL, even without initial video source
-    const url = new URL('./360viewer-headless.html', window.location.href);
-    url.searchParams.set('origin', window.location.origin);
-    url.searchParams.set('autoPreload', 'true');
+    // Build the URL parameters
+    const params = new URLSearchParams({
+      origin: window.location.origin,
+      autoPreload: 'true'
+    });
     
     // Add video source if available
     if (videoSrc) {
-      url.searchParams.set('video', videoSrc);
+      params.set('video', videoSrc);
     }
     
-    return url.toString();
+    return `./360viewer-headless.html?${params.toString()}`;
   };
   
   return (

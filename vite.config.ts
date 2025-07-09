@@ -17,6 +17,30 @@ export default defineConfig({
         key: fs.readFileSync('.certs/key.pem'),
         cert: fs.readFileSync('.certs/cert.pem'),
       }
-    }), // Use mkcert-generated certificates for better mobile compatibility
+    }),
   },
+  build: {
+    // Ensure proper chunk size for better performance
+    chunkSizeWarningLimit: 1000,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor': ['react', 'react-dom'],
+          'ui': ['@radix-ui/react-slider', '@radix-ui/react-switch', '@radix-ui/react-scroll-area', '@radix-ui/react-dialog']
+        }
+      }
+    },
+    // Optimize asset handling
+    assetsInlineLimit: 4096,
+    minify: 'terser',
+    terserOptions: {
+      compress: {
+        drop_console: false, // Keep console logs for debugging
+        drop_debugger: true
+      }
+    }
+  },
+  optimizeDeps: {
+    include: ['react', 'react-dom']
+  }
 }) 
