@@ -9,9 +9,14 @@ export default defineConfig({
     host: '0.0.0.0', // Allow external connections for mobile testing  
     port: 3001,
     open: true,
-    https: {
-      key: fs.readFileSync('.certs/key.pem'),
-      cert: fs.readFileSync('.certs/cert.pem'),
-    }, // Use mkcert-generated certificates for better mobile compatibility
+    // Only use HTTPS in development if certificate files exist
+    ...(process.env.NODE_ENV !== 'production' && 
+        fs.existsSync('.certs/key.pem') && 
+        fs.existsSync('.certs/cert.pem') && {
+      https: {
+        key: fs.readFileSync('.certs/key.pem'),
+        cert: fs.readFileSync('.certs/cert.pem'),
+      }
+    }), // Use mkcert-generated certificates for better mobile compatibility
   },
 }) 
