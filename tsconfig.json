@@ -18,16 +18,7 @@
     "strict": true,
     "noUnusedLocals": false,
     "noUnusedParameters": false,
-    "noFallthroughCasesInSwitch": true,
-
-    /* Path mapping */
-    "baseUrl": ".",
-    "paths": {
-      "@/*": ["./*"],
-      "@/components/*": ["./components/*"],
-      "@/data/*": ["./data/*"],
-      "@/styles/*": ["./styles/*"]
-    }
+    "noFallthroughCasesInSwitch": true
   },
   "include": ["*.tsx", "components/**/*.ts", "components/**/*.tsx", "main.tsx", "App.tsx", "types.d.ts"],
   "exclude": ["node_modules", "dist", "build", "*.config.ts", "*.config.d.ts"],

@@ -638,6 +638,84 @@ Update `tour_config.json` with your 360° video URLs:
 
 ## 🚀 Production Deployment
 
+### Vercel Deployment (Recommended)
+
+The application is optimized for Vercel deployment with automatic builds and optimizations:
+
+```bash
+# 1. Connect your repository to Vercel
+# 2. Vercel will automatically detect the Vite framework
+# 3. Deploy with default settings - no additional configuration needed
+
+# Manual deployment (optional)
+npm run build
+npx vercel --prod
+```
+
+#### Vercel Configuration
+- **Framework**: Vite (auto-detected)
+- **Build Command**: `npm run build` 
+- **Output Directory**: `dist`
+- **Install Command**: `npm install`
+- **Dev Command**: `npm run dev`
+
+#### Deployment Features
+- ✅ **SPA Routing**: Automatic rewrites for client-side routing
+- ✅ **Static Asset Optimization**: Immutable caching for assets
+- ✅ **Security Headers**: XSS protection and content security
+- ✅ **Performance**: Edge caching and global CDN
+- ✅ **HTTPS**: Automatic SSL certificates
+
+### Alternative Deployment Platforms
+
+#### Netlify
+```bash
+# Build settings
+Build command: npm run build
+Publish directory: dist
+
+# Add to netlify.toml
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+```
+
+#### GitHub Pages
+```bash
+# Install gh-pages
+npm install --save-dev gh-pages
+
+# Add to package.json scripts
+"homepage": "https://username.github.io/repo-name",
+"predeploy": "npm run build",
+"deploy": "gh-pages -d dist"
+
+# Deploy
+npm run deploy
+```
+
+#### Docker Deployment
+```dockerfile
+# Dockerfile
+FROM node:18-alpine AS builder
+WORKDIR /app
+COPY package*.json ./
+RUN npm install
+COPY . .
+RUN npm run build
+
+FROM nginx:alpine
+COPY --from=builder /app/dist /usr/share/nginx/html
+COPY nginx.conf /etc/nginx/nginx.conf
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]
+```
+
 ### Performance Optimization
 1. **Video CDN**: Use optimized CDN for 360° video delivery
 2. **Image Optimization**: WebP/AVIF formats with fallbacks
@@ -649,6 +727,57 @@ Update `tour_config.json` with your 360° video URLs:
 2. **Performance Metrics**: Core Web Vitals monitoring
 3. **User Analytics**: Engagement and interaction tracking
 4. **Video Analytics**: Streaming quality and buffer health
+
+### Common Deployment Issues & Solutions
+
+#### Issue: Grey Screen After Configuration
+```bash
+# Check browser console for errors
+# Verify playlist.json is accessible at /data/playlist.json
+# Ensure proper CORS headers for external media files
+```
+
+#### Issue: 404 Errors on Refresh
+```bash
+# Solution: Add proper SPA routing configuration
+# Vercel: Uses vercel.json rewrites (already configured)
+# Netlify: Add _redirects file or netlify.toml
+# Apache: Add .htaccess with RewriteRule
+```
+
+#### Issue: XR Mode Not Loading
+```bash
+# Check Content Security Policy headers
+# Ensure iframe permissions are properly set
+# Verify A-Frame CDN accessibility
+# Check for HTTPS requirement on mobile devices
+```
+
+#### Issue: Audio/Video CORS Errors
+```bash
+# Ensure media files have proper CORS headers
+# Add crossorigin="anonymous" to media elements
+# Configure CDN with appropriate Access-Control-Allow-Origin
+```
+
+### Environment Variables
+No environment variables are required for basic deployment. All configuration is handled through the JSON files in the `public/data/` directory.
+
+### Build Output Structure
+```
+dist/
+├── index.html
+├── assets/
+│   ├── index-[hash].js
+│   ├── index-[hash].css
+│   └── vendor-[hash].js
+├── data/
+│   ├── playlist.json
+│   └── tour_config.json
+├── 360viewer-headless.html
+├── 360viewer-parent.html
+└── manifest.json
+```
 
 ## 🎯 **XR Mode Testing & Debugging Guide**
 
