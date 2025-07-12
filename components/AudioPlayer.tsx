@@ -225,6 +225,7 @@ interface AudioPlayerProps {
   deviceOrientationPermission?: DeviceOrientationPermissionState;
   isTeaserMode?: boolean;
   teaserPreloading?: boolean;
+  shouldStartLoading?: boolean; // New prop to control when to start loading content
   developerConfig?: DeveloperConfigSelection;
 }
 
@@ -334,7 +335,7 @@ const teaserTourConfig: TourConfig = {
   }
 };
 
-export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTeaserMode = false, teaserPreloading = false, developerConfig }: AudioPlayerProps) {
+export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTeaserMode = false, teaserPreloading = false, shouldStartLoading = true, developerConfig }: AudioPlayerProps) {
   // Audio state
   const [tracks, setTracks] = useState<Track[]>([]);
   const [currentTrack, setCurrentTrack] = useState(0);
@@ -590,9 +591,16 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
     }
   }, [tracks, currentTrack, xrSceneInitialized]);
 
-  // Auto-start XR mode when in teaser mode
+  // Auto-start XR mode when in teaser mode (controlled by shouldStartLoading)
   useEffect(() => {
+    // Check shouldStartLoading to control when to start loading
     if (isTeaserMode && tracks.length > 0 && !isXRLoading && !isXRMode) {
+      // Only proceed if shouldStartLoading is true
+      if (!shouldStartLoading) {
+        console.log('🎬 Teaser mode ready but waiting for shouldStartLoading');
+        return;
+      }
+      
       console.log('🎬 Auto-starting XR mode for teaser');
       
       setIsXRLoading(true);
@@ -662,7 +670,7 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
         }
       }, 6000);
     }
-  }, [isTeaserMode, tracks.length, isXRLoading, isXRMode, deviceOrientationPermission, currentTrack, sendAudioMessage]);
+  }, [isTeaserMode, tracks.length, isXRLoading, isXRMode, deviceOrientationPermission, currentTrack, sendAudioMessage, shouldStartLoading]);
 
   // Send XR scene initialization when XR mode loads
   useEffect(() => {
@@ -1036,10 +1044,32 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
     }
   };
 
-  // Load tour configuration (teaser or full) - removed artificial delay
+  // Load tour configuration (teaser or full) - respect shouldStartLoading prop
   useEffect(() => {
+    console.log('🎵 Tour config loading effect triggered with:', {
+      shouldStartLoading,
+      isTeaserMode,
+      hasDeveloperConfig: !!developerConfig,
+      isValidConfig: developerConfig?.isValid
+    });
+    
+    // Skip loading if shouldStartLoading is false
+    if (!shouldStartLoading) {
+      console.log('🎵 Skipping tour config loading - waiting for shouldStartLoading to be true');
+      return;
+    }
+    
     const loadTourConfig = () => {
       let configToUse: TourConfig;
+      
+      console.log('🎵 Loading tour config with developer config:', {
+        hasDeveloperConfig: !!developerConfig,
+        isValid: developerConfig?.isValid,
+        hasMediaData: !!developerConfig?.mediaData,
+        mode: developerConfig?.mode,
+        isTeaserMode,
+        shouldStartLoading
+      });
       
       if (developerConfig && developerConfig.isValid && developerConfig.mediaData) {
         // Use developer configuration
@@ -1049,13 +1079,18 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
         // Fallback to default configuration
         configToUse = isTeaserMode ? teaserTourConfig : defaultTourConfig;
         console.log(`🎵 Loaded ${isTeaserMode ? 'teaser' : 'full tour'} configuration (fallback)`);
+        console.log('🎵 Using fallback because:', {
+          noDeveloperConfig: !developerConfig,
+          notValid: developerConfig && !developerConfig.isValid,
+          noMediaData: developerConfig && !developerConfig.mediaData
+        });
       }
       
       setTourConfig(configToUse);
     };
 
     loadTourConfig();
-  }, [isTeaserMode, developerConfig]);
+  }, [isTeaserMode, developerConfig, shouldStartLoading]);
 
   // Convert tracks when config loads and ensure slider starts at index 0
   useEffect(() => {
@@ -1464,77 +1499,90 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
 
 
 
-  // Loading state
-  if (!tourConfig || tracks.length === 0) {
-    return (
-      <div className="w-full h-full bg-gradient-to-br from-slate-900 to-slate-800 dark:from-purple-50 dark:to-blue-50 relative overflow-hidden flex flex-col">
-        {/* Loading Skeleton */}
-        <div className="flex-1 pt-12 md:pt-16 lg:pt-20 pb-4 md:pb-6 px-4 md:px-6 lg:px-8 flex items-center justify-center">
-          <div className="relative w-full max-w-sm md:max-w-md lg:max-w-lg">
-            <Skeleton className="aspect-square rounded-lg" />
-            <div className="absolute bottom-2 left-1/2 transform -translate-x-1/2 flex gap-1">
-              {[...Array(3)].map((_, i) => (
-                <Skeleton key={i} className="w-1.5 h-1.5 rounded-full" />
-              ))}
-            </div>
-          </div>
-        </div>
-        
-        {/* Audio Controller Skeleton */}
-        <div className="flex-shrink-0 mx-4 md:mx-6 lg:mx-8 mb-6 md:mb-8">
-          <div className="bg-slate-900/95 dark:bg-slate-50/95 backdrop-blur-sm rounded-lg p-4 md:p-6 lg:p-8 max-w-lg mx-auto touch-target">
-            {/* Enhanced loading skeleton with mobile optimizations */}
-            <div className="text-center mb-4">
-              <div className="relative">
-                <Skeleton className="h-6 w-48 mx-auto mb-2 mobile-optimized" />
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-pulse"></div>
-              </div>
-              <Skeleton className="h-4 w-32 mx-auto mb-1 mobile-optimized" />
-              <Skeleton className="h-3 w-24 mx-auto mobile-optimized" />
-              
-              {/* Loading progress indicator */}
-              <div className="mt-3 flex items-center justify-center gap-2 text-slate-400 text-xs">
-                <div className="w-1 h-1 bg-slate-400 rounded-full animate-pulse"></div>
-                <div className="w-1 h-1 bg-slate-400 rounded-full animate-pulse" style={{animationDelay: '0.2s'}}></div>
-                <div className="w-1 h-1 bg-slate-400 rounded-full animate-pulse" style={{animationDelay: '0.4s'}}></div>
-                <span>Loading audio tour...</span>
-              </div>
-            </div>
-            
-            {/* Enhanced progress bar skeleton */}
-            <div className="relative mb-2">
-              <Skeleton className="h-2 w-full mobile-optimized" />
-              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-blue-400/30 to-transparent animate-pulse"></div>
-            </div>
-            
-            <div className="flex justify-between mb-4">
-              <Skeleton className="h-3 w-8 mobile-optimized" />
-              <Skeleton className="h-3 w-8 mobile-optimized" />
-            </div>
-            
-            {/* Enhanced control buttons skeleton */}
-            <div className="flex items-center justify-between">
-              <Skeleton className="h-10 w-10 rounded-md mobile-optimized" />
-              <div className="flex items-center space-x-3">
-                <Skeleton className="h-10 w-10 rounded-md mobile-optimized" />
-                <div className="relative">
-                  <Skeleton className="h-12 w-12 rounded-md mobile-optimized" />
-                  <div className="absolute inset-0 border-2 border-blue-400/30 rounded-md animate-pulse"></div>
-                </div>
-                <Skeleton className="h-10 w-10 rounded-md mobile-optimized" />
-              </div>
-              <Skeleton className="h-10 w-10 rounded-md mobile-optimized" />
-            </div>
+  // Use loading flag to conditionally render either loading skeleton or main content
+  const renderLoadingSkeleton = () => (
+    <div className="w-full h-full bg-gradient-to-br from-slate-900 to-slate-800 dark:from-purple-50 dark:to-blue-50 relative overflow-hidden flex flex-col">
+      {/* Loading Skeleton */}
+      <div className="flex-1 pt-12 md:pt-16 lg:pt-20 pb-4 md:pb-6 px-4 md:px-6 lg:px-8 flex items-center justify-center">
+        <div className="relative w-full max-w-sm md:max-w-md lg:max-w-lg">
+          <Skeleton className="aspect-square rounded-lg" />
+          <div className="absolute bottom-2 left-1/2 transform -translate-x-1/2 flex gap-1">
+            {[...Array(3)].map((_, i) => (
+              <Skeleton key={i} className="w-1.5 h-1.5 rounded-full" />
+            ))}
           </div>
         </div>
       </div>
-    );
+      
+      {/* Audio Controller Skeleton */}
+      <div className="flex-shrink-0 mx-4 md:mx-6 lg:mx-8 mb-6 md:mb-8">
+        <div className="bg-slate-900/95 dark:bg-slate-50/95 backdrop-blur-sm rounded-lg p-4 md:p-6 lg:p-8 max-w-lg mx-auto touch-target">
+          {/* Enhanced loading skeleton with mobile optimizations */}
+          <div className="text-center mb-4">
+            <div className="relative">
+              <Skeleton className="h-6 w-48 mx-auto mb-2 mobile-optimized" />
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-pulse"></div>
+            </div>
+            <Skeleton className="h-4 w-32 mx-auto mb-1 mobile-optimized" />
+            <Skeleton className="h-3 w-24 mx-auto mobile-optimized" />
+            
+            {/* Loading progress indicator */}
+            <div className="mt-3 flex items-center justify-center gap-2 text-slate-400 text-xs">
+              <div className="w-1 h-1 bg-slate-400 rounded-full animate-pulse"></div>
+              <div className="w-1 h-1 bg-slate-400 rounded-full animate-pulse" style={{animationDelay: '0.2s'}}></div>
+              <div className="w-1 h-1 bg-slate-400 rounded-full animate-pulse" style={{animationDelay: '0.4s'}}></div>
+              <span>Loading audio tour...</span>
+            </div>
+          </div>
+          
+          {/* Enhanced progress bar skeleton */}
+          <div className="relative mb-2">
+            <Skeleton className="h-2 w-full mobile-optimized" />
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-blue-400/30 to-transparent animate-pulse"></div>
+          </div>
+          
+          <div className="flex justify-between mb-4">
+            <Skeleton className="h-3 w-8 mobile-optimized" />
+            <Skeleton className="h-3 w-8 mobile-optimized" />
+          </div>
+          
+          {/* Enhanced control buttons skeleton */}
+          <div className="flex items-center justify-between">
+            <Skeleton className="h-10 w-10 rounded-md mobile-optimized" />
+            <div className="flex items-center space-x-3">
+              <Skeleton className="h-10 w-10 rounded-md mobile-optimized" />
+              <div className="relative">
+                <Skeleton className="h-12 w-12 rounded-md mobile-optimized" />
+                <div className="absolute inset-0 border-2 border-blue-400/30 rounded-md animate-pulse"></div>
+              </div>
+              <Skeleton className="h-10 w-10 rounded-md mobile-optimized" />
+            </div>
+            <Skeleton className="h-10 w-10 rounded-md mobile-optimized" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  // Loading state - calculate this flag for conditional rendering
+  const isLoading = !tourConfig || tracks.length === 0;
+  
+  // Log loading state but don't return early
+  if (isLoading) {
+    console.log('🎵 AudioPlayer in loading state:', { 
+      tourConfig: !!tourConfig, 
+      tracksLength: tracks.length,
+      shouldStartLoading,
+      isTeaserMode,
+      developerConfig: !!developerConfig
+    });
   }
 
-  const track = tracks[currentTrack];
-  const currentCover = track.thumbnails && track.thumbnails.length > 0 
+  // Safely access track data only when available
+  const track = !isLoading ? tracks[currentTrack] : null;
+  const currentCover = track && track.thumbnails && track.thumbnails.length > 0 
     ? track.thumbnails[currentThumbnailIndex] 
-    : track.cover;
+    : track?.cover;
 
   const togglePlay = () => {
     if (!audioRef.current) {
@@ -1763,7 +1811,7 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
 
   // Enhanced manual thumbnail navigation functions with animated transitions
   const nextThumbnail = () => {
-    if (!track.thumbnails || track.thumbnails.length <= 1 || isTransitioning) return;
+    if (!track || !track.thumbnails || track.thumbnails.length <= 1 || isTransitioning) return;
     
     setAutoTransitionDirection('next');
     setIsTransitioning(true);
@@ -1776,7 +1824,7 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
   };
 
   const previousThumbnail = () => {
-    if (!track.thumbnails || track.thumbnails.length <= 1 || isTransitioning) return;
+    if (!track || !track.thumbnails || track.thumbnails.length <= 1 || isTransitioning) return;
     
     setAutoTransitionDirection('prev');
     setIsTransitioning(true);
@@ -1812,7 +1860,7 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
   };
 
   const nextFullscreenImage = () => {
-    if (!track.thumbnails || track.thumbnails.length <= 1) return;
+    if (!track || !track.thumbnails || track.thumbnails.length <= 1) return;
     setFullscreenImageIndex((prev) => (prev + 1) % track.thumbnails!.length);
     setFullscreenZoom(1);
     setFullscreenPanX(0);
@@ -1821,7 +1869,7 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
   };
 
   const previousFullscreenImage = () => {
-    if (!track.thumbnails || track.thumbnails.length <= 1) return;
+    if (!track || !track.thumbnails || track.thumbnails.length <= 1) return;
     setFullscreenImageIndex((prev) => (prev - 1 + track.thumbnails!.length) % track.thumbnails!.length);
     setFullscreenZoom(1);
     setFullscreenPanX(0);
@@ -2009,6 +2057,7 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
   };
 
   const launchXRmode = () => {
+    if (!track) return;
     if (track.isXR && track.xrSrc) {
       // Check if both XR scene AND videosphere material are ready before allowing entry
       if (!xrSceneReady || !videosphereMaterialReady) {
@@ -2030,7 +2079,7 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
           timestamp: performance.now(),
           data: {
             isXRMode: true,
-            trackData: track,
+            trackData: track || undefined, // Convert null to undefined to match interface
             deviceOrientationPermission: deviceOrientationPermission || {
               granted: false,
               requested: false,
@@ -2063,7 +2112,7 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
           timestamp: performance.now(),
           data: {
             isXRMode: true,
-            trackData: track,
+            trackData: track || undefined, // Convert null to undefined to match interface
             deviceOrientationPermission: deviceOrientationPermission || {
               granted: false,
               requested: false,
@@ -2092,7 +2141,7 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
       timestamp: performance.now(),
       data: {
         isXRMode: false,
-        trackData: track,
+        trackData: track || undefined, // Convert null to undefined to match interface
         deviceOrientationPermission: deviceOrientationPermission || {
           granted: false,
           requested: false,
@@ -2123,7 +2172,7 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
   };
 
   const openTeaserLink = () => {
-    if (track.teaserBacklink) {
+    if (track && track.teaserBacklink) {
       window.open(track.teaserBacklink, '_blank');
     }
     setShowTeaser(false);
@@ -2157,7 +2206,7 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
     // 4. Device supports orientation
     // 5. User is on a mobile device
     return (
-      track.isXR && 
+      track && track.isXR && 
       deviceOrientationPermission && 
       deviceOrientationPermission.requested && 
       !deviceOrientationPermission.granted && 
@@ -2446,7 +2495,7 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
     </div>
   );
 
-  return (
+    return isLoading ? renderLoadingSkeleton() : (
     <div ref={containerRef} className="w-full h-full bg-gradient-to-br from-slate-900 to-slate-800 relative overflow-hidden flex flex-col">
       <audio
         ref={audioRef}
@@ -3132,7 +3181,7 @@ export function AudioPlayer({ onAudioMessage, deviceOrientationPermission, isTea
                 </div>
 
                               {/* Right - Volume or XR Mode Toggle - Enhanced Touch Target */}
-                {track.isXR ? (
+                {track?.isXR ? (
                   <Button
                     variant="ghost"
                     size="icon"

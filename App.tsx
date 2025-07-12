@@ -23,11 +23,11 @@ interface DeviceOrientationPermissionState {
   error?: string;
 }
 
-// Z-Index Layer System for App - Lower z-indexes to avoid blocking native permission dialogs
+// Z-Index Layer System for App - Landing overlay must be above AudioPlayer's highest z-index (z-80)
 const APP_Z_LAYERS = {
   BACKGROUND: 'z-0',
   MAIN_CONTENT: 'z-10', 
-  LANDING_OVERLAY: 'z-20', // Lowered from z-50 to avoid blocking permission dialogs
+  LANDING_OVERLAY: 'z-[90]', // Custom z-index to ensure it appears above all AudioPlayer content (max z-80)
   DECORATIVE_ELEMENTS: 'z-30'
 } as const;
 
@@ -107,6 +107,7 @@ export default function App() {
   const [isTeaserMode, setIsTeaserMode] = useState(false);
   const [teaserPreloaded, setTeaserPreloaded] = useState(false);
   const [teaserPreloading, setTeaserPreloading] = useState(false);
+  const [hasStartedExperience, setHasStartedExperience] = useState(false); // Track if user has clicked Get Started
   const [developerConfig, setDeveloperConfig] = useState<DeveloperConfigSelection | null>(null);
   const [
     deviceOrientationPermission,
@@ -170,6 +171,9 @@ export default function App() {
   // Handle developer configuration completion
   const handleDeveloperConfigComplete = useCallback((config: DeveloperConfigSelection) => {
     console.log('🔧 Developer configuration received:', config);
+    console.log('🔧 Config validity:', config.isValid);
+    console.log('🔧 Config mode:', config.mode);
+    
     setDeveloperConfig(config);
     setIsTeaserMode(config.mode === 'teaser');
     setShowDeveloperConfig(false);
@@ -192,6 +196,12 @@ export default function App() {
     }
     
     console.log('🔧 Developer config complete - showLandingPage:', true, 'showDeveloperConfig:', false);
+    console.log('🔧 States after config completion:', {
+      showDeveloperConfig: false,
+      showLandingPage: true,
+      isTeaserMode: config.mode === 'teaser',
+      configValid: config.isValid
+    });
   }, []);
 
   // Handle audio sync messages from AudioPlayer with mode-aware logging
@@ -303,11 +313,19 @@ export default function App() {
     async (isTeaserRequest: boolean = false) => {
       const modeConfig = isTeaserRequest ? TOUR_MODE_CONFIG.TEASER : TOUR_MODE_CONFIG.FULL;
       console.log(`🚀 Starting ${modeConfig.displayName}:`, modeConfig.description);
+      console.log('🚀 Current configuration state:', {
+        developerConfig,
+        isTeaserMode,
+        hasStartedExperience,
+        showLandingPage,
+        deviceOrientationPermission
+      });
       
       setIsTeaserMode(isTeaserRequest);
+      setHasStartedExperience(true); // Signal that the user has started the experience
       
       // Start background preloading immediately while permission is being requested
-      console.log('🎯 Starting background preloading for all content...');
+      console.log('🎯 Starting background preloading for all content - setting shouldStartLoading to true');
       // The AudioPlayer will automatically start preloading once it's rendered
       
       // Request device orientation permission - keep landing page visible during this process
@@ -371,10 +389,24 @@ export default function App() {
       isTeaserMode,
       teaserPreloaded,
       teaserPreloading,
-      developerConfigValid: developerConfig?.isValid
+      developerConfigValid: developerConfig?.isValid,
+      hasDeveloperConfig: !!developerConfig
     });
+    
+    // Additional debugging for the grey screen issue
+    if (!showDeveloperConfig) {
+      console.log('🔍 Main app container should be visible');
+      console.log('🔍 AudioPlayer should be rendering with config:', developerConfig);
+      if (showLandingPage) {
+        console.log('🔍 Landing page overlay should be visible');
+      } else {
+        console.log('🔍 Landing page overlay should be hidden');
+      }
+    }
   }
 
+  console.log('🚀 App component rendering');
+  
   return (
     <div className={`dark viewport-fit bg-gradient-to-br from-slate-900 to-slate-800 ${APP_Z_LAYERS.BACKGROUND} overflow-hidden fixed inset-0 mobile-optimized`}>
       {/* Developer Configuration - Shown first before everything else */}
@@ -394,6 +426,7 @@ export default function App() {
                 }
                 isTeaserMode={isTeaserMode}
                 teaserPreloading={teaserPreloading}
+                shouldStartLoading={hasStartedExperience}
                 developerConfig={developerConfig || undefined}
               />
             </div>
@@ -485,40 +518,44 @@ export default function App() {
 
                 {/* Bottom Section - Action Buttons - Compact on mobile */}
                 <div className="flex-shrink-0 space-y-2.5 sm:space-y-3 px-4 sm:px-6 pb-4 sm:pb-6">
-                  {/* Free Preview Button */}
-                  <Button
-                    onClick={() => handleGetStarted(true)}
-                    disabled={teaserPreloading || (!teaserPreloaded && !developerConfig) || (developerConfig ? !developerConfig.isValid : false)}
-                    className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 active:from-blue-800 active:to-purple-800 disabled:from-slate-600 disabled:to-slate-700 disabled:cursor-not-allowed disabled:opacity-75 text-white h-11 sm:h-12 rounded-xl transition-all duration-200 ease-out active:scale-95 hover:scale-[1.02] disabled:hover:scale-100 disabled:active:scale-100 border-0 text-sm sm:text-base"
-                  >
-                    <div className="flex items-center gap-2">
-                      {teaserPreloading ? (
-                        <>
-                          <Loader2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 animate-spin" />
-                          Loading Preview...
-                        </>
-                      ) : (teaserPreloaded || developerConfig) ? (
-                        <>
-                          <Play className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                          Try Free Preview
-                        </>
-                      ) : (
-                        <>
-                          <Loader2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 animate-spin" />
-                          Preparing Preview...
-                        </>
-                      )}
-                    </div>
-                  </Button>
+                  {/* Show Preview Button only if in teaser mode or no config selected yet */}
+                  {(developerConfig?.mode === 'teaser' || !developerConfig) && (
+                    <Button
+                      onClick={() => handleGetStarted(true)}
+                      disabled={teaserPreloading || (!teaserPreloaded && !developerConfig) || (developerConfig ? !developerConfig.isValid : false)}
+                      className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 active:from-blue-800 active:to-purple-800 disabled:from-slate-600 disabled:to-slate-700 disabled:cursor-not-allowed disabled:opacity-75 text-white h-11 sm:h-12 rounded-xl transition-all duration-200 ease-out active:scale-95 hover:scale-[1.02] disabled:hover:scale-100 disabled:active:scale-100 border-0 text-sm sm:text-base"
+                    >
+                      <div className="flex items-center gap-2">
+                        {teaserPreloading ? (
+                          <>
+                            <Loader2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 animate-spin" />
+                            Loading Preview...
+                          </>
+                        ) : (teaserPreloaded || developerConfig) ? (
+                          <>
+                            <Play className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                            Try Free Preview
+                          </>
+                        ) : (
+                          <>
+                            <Loader2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 animate-spin" />
+                            Preparing Preview...
+                          </>
+                        )}
+                      </div>
+                    </Button>
+                  )}
 
-                  {/* Full Tour Button */}
-                  <Button
-                    onClick={() => handleGetStarted(false)}
-                    disabled={developerConfig ? !developerConfig.isValid : false}
-                    className="w-full bg-white hover:bg-slate-100 active:bg-slate-200 disabled:bg-slate-600 disabled:text-slate-400 disabled:cursor-not-allowed disabled:opacity-75 text-slate-900 h-11 sm:h-12 rounded-xl transition-all duration-200 ease-out active:scale-95 hover:scale-[1.02] disabled:hover:scale-100 disabled:active:scale-100 text-sm sm:text-base"
-                  >
-                    Start Full Tour
-                  </Button>
+                  {/* Show Full Tour Button only if in full_tour mode or no config selected yet */}
+                  {(developerConfig?.mode === 'full_tour' || !developerConfig) && (
+                    <Button
+                      onClick={() => handleGetStarted(false)}
+                      disabled={developerConfig ? !developerConfig.isValid : false}
+                      className="w-full bg-white hover:bg-slate-100 active:bg-slate-200 disabled:bg-slate-600 disabled:text-slate-400 disabled:cursor-not-allowed disabled:opacity-75 text-slate-900 h-11 sm:h-12 rounded-xl transition-all duration-200 ease-out active:scale-95 hover:scale-[1.02] disabled:hover:scale-100 disabled:active:scale-100 text-sm sm:text-base"
+                    >
+                      Start Full Tour
+                    </Button>
+                  )}
 
                   {/* Enhanced disclaimer or configuration status - More compact */}
                   {developerConfig && !developerConfig.isValid ? (

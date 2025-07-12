@@ -161,10 +161,10 @@ export function DeveloperConfig({ onConfigurationComplete }: DeveloperConfigProp
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
+      <div className="fixed inset-0 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center safe-top safe-bottom safe-left safe-right">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-          <p className="text-white text-lg">Loading configuration...</p>
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500 mx-auto mb-3"></div>
+          <p className="text-white text-sm">Loading configuration...</p>
         </div>
       </div>
     );
@@ -172,10 +172,10 @@ export function DeveloperConfig({ onConfigurationComplete }: DeveloperConfigProp
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
-        <Alert className="max-w-md">
+      <div className="fixed inset-0 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4 safe-top safe-bottom safe-left safe-right">
+        <Alert className="max-w-sm">
           <AlertCircle className="h-4 w-4" />
-          <AlertDescription className="text-red-300">
+          <AlertDescription className="text-red-300 text-sm">
             {error}
           </AlertDescription>
         </Alert>
@@ -184,323 +184,312 @@ export function DeveloperConfig({ onConfigurationComplete }: DeveloperConfigProp
   }
 
   return (
-    <div className="h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex flex-col overflow-hidden">
-      <div className="flex-1 flex flex-col max-w-4xl mx-auto w-full">
-        {/* Header - Fixed size */}
-        <div className="flex-shrink-0 text-center p-4 md:p-6">
-          <div className="flex items-center justify-center gap-3 mb-4">
-            <div className="p-3 bg-blue-600/20 rounded-lg">
-              <Settings className="h-6 w-6 text-blue-400" />
+    <div className="fixed inset-0 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 safe-top safe-bottom safe-left safe-right">
+      <div className="h-full flex flex-col max-w-6xl mx-auto">
+        {/* Compact Header - Fixed size */}
+        <div className="flex-shrink-0 px-4 py-3 border-b border-slate-700/50">
+          <div className="flex items-center gap-2 mb-1">
+            <div className="p-2 bg-blue-600/20 rounded-md">
+              <Settings className="h-4 w-4 text-blue-400" />
             </div>
-            <h1 className="text-xl md:text-2xl font-bold text-white">Developer Configuration</h1>
+            <h1 className="text-lg font-bold text-white">Developer Configuration</h1>
           </div>
-          <p className="text-slate-300 text-sm md:text-base max-w-2xl mx-auto">
-            Configure tour location, mode, and content before launching the application
+          <p className="text-slate-400 text-sm">
+            Configure tour location and mode
           </p>
-          <div className="mt-2 flex items-center justify-center gap-2">
-            <Badge variant="outline" className="text-xs md:text-sm">
+          <div className="mt-1">
+            <Badge variant="outline" className="text-xs">
               <Info className="h-3 w-3 mr-1" />
               Development Mode
             </Badge>
           </div>
         </div>
 
-        {/* Content - Scrollable */}
-        <div className="flex-1 overflow-y-auto px-4 md:px-6 pb-4 md:pb-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
-            {/* Configuration Panel */}
-            <div className="space-y-4 md:space-y-6">
-              {/* Tour Location Selection */}
-              <Card className="bg-slate-800 border-slate-700">
-                <CardHeader className="pb-3 md:pb-6">
-                  <CardTitle className="text-white flex items-center gap-2 text-base md:text-lg">
-                    <MapPin className="h-5 w-5" />
-                    Tour Location
-                  </CardTitle>
-                  <CardDescription className="text-slate-400 text-sm md:text-base">
-                    Select the tour location to configure
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-3 pt-0">
-                  {playlistData && Object.entries(playlistData.locations).map(([key, location]) => (
-                    <Button
-                      key={key}
-                      variant={selectedLocation === key ? "default" : "outline"}
-                      className={`w-full justify-start h-auto p-3 md:p-4 ${
-                        selectedLocation === key 
-                          ? 'bg-blue-600 hover:bg-blue-700 text-white' 
-                          : 'bg-slate-700 hover:bg-slate-600 text-slate-300'
-                      }`}
-                      onClick={() => setSelectedLocation(key)}
-                    >
-                      <div className="text-left">
-                        <div className="font-medium text-sm md:text-base">{location.name}</div>
-                        <div className="text-xs md:text-sm opacity-75 line-clamp-2">{location.description}</div>
-                      </div>
-                    </Button>
-                  ))}
-                </CardContent>
-              </Card>
-
-                          {/* Mode Selection */}
-              <Card className="bg-slate-800 border-slate-700">
-                <CardHeader className="pb-3 md:pb-6">
-                  <CardTitle className="text-white flex items-center gap-2 text-base md:text-lg">
-                    <Play className="h-5 w-5" />
-                    Tour Mode
-                  </CardTitle>
-                  <CardDescription className="text-slate-400 text-sm md:text-base">
-                    Choose between teaser preview or full tour experience
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-3 pt-0">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <Button
-                      variant={selectedMode === 'teaser' ? "default" : "outline"}
-                      className={`h-auto p-3 md:p-4 ${
-                        selectedMode === 'teaser' 
-                          ? 'bg-purple-600 hover:bg-purple-700 text-white' 
-                          : 'bg-slate-700 hover:bg-slate-600 text-slate-300'
-                      }`}
-                      onClick={() => setSelectedMode('teaser')}
-                    >
-                      <div className="text-center">
-                        <div className="font-medium text-sm md:text-base">Teaser Mode</div>
-                        <div className="text-xs md:text-sm opacity-75">Preview Experience</div>
-                      </div>
-                    </Button>
-                    <Button
-                      variant={selectedMode === 'full_tour' ? "default" : "outline"}
-                      className={`h-auto p-3 md:p-4 ${
-                        selectedMode === 'full_tour' 
-                          ? 'bg-green-600 hover:bg-green-700 text-white' 
-                          : 'bg-slate-700 hover:bg-slate-600 text-slate-300'
-                      }`}
-                      onClick={() => setSelectedMode('full_tour')}
-                    >
-                      <div className="text-center">
-                        <div className="font-medium text-sm md:text-base">Full Tour</div>
-                        <div className="text-xs md:text-sm opacity-75">Complete Experience</div>
-                      </div>
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-
-                          {/* Teaser Selection (only shown in teaser mode) */}
-              {selectedMode === 'teaser' && (
+        {/* Scrollable Content Area */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="p-4 space-y-4">
+            {/* Single Column Layout on Mobile, Two Columns on Desktop */}
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+              {/* Left Column - Configuration Controls */}
+              <div className="space-y-4">
+                {/* Tour Location Selection */}
                 <Card className="bg-slate-800 border-slate-700">
-                  <CardHeader className="pb-3 md:pb-6">
-                    <CardTitle className="text-white flex items-center gap-2 text-base md:text-lg">
-                      <Users className="h-5 w-5" />
-                      Teaser Selection
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-white flex items-center gap-2 text-sm">
+                      <MapPin className="h-4 w-4" />
+                      Tour Location
                     </CardTitle>
-                    <CardDescription className="text-slate-400 text-sm md:text-base">
-                      Choose which teaser experience to configure
-                    </CardDescription>
                   </CardHeader>
-                  <CardContent className="space-y-3 pt-0">
-                    <div className="grid grid-cols-2 gap-2 md:gap-3">
-                      {['teaser_1', 'teaser_2', 'teaser_3', 'teaser_4'].map((teaserId) => {
-                        const teaserData = selectedLocation && playlistData 
-                          ? playlistData.locations[selectedLocation]?.teasers[teaserId] 
-                          : null;
-                        
-                        return (
-                          <Button
-                            key={teaserId}
-                            variant={selectedTeaser === teaserId ? "default" : "outline"}
-                            className={`h-auto p-2 md:p-3 min-h-[60px] ${
-                              selectedTeaser === teaserId 
-                                ? 'bg-purple-600 hover:bg-purple-700 text-white' 
-                                : 'bg-slate-700 hover:bg-slate-600 text-slate-300'
-                            }`}
-                            onClick={() => setSelectedTeaser(teaserId)}
-                          >
-                            <div className="text-center">
-                              <div className="font-medium text-xs md:text-sm">{teaserId.replace('_', ' ').toUpperCase()}</div>
-                              <div className="flex items-center justify-center mt-1">
-                                {teaserData?.available ? (
-                                  <CheckCircle className="h-3 w-3 text-green-400" />
-                                ) : (
-                                  <AlertCircle className="h-3 w-3 text-red-400" />
-                                )}
-                              </div>
-                            </div>
-                          </Button>
-                        );
-                      })}
+                  <CardContent className="space-y-2 pt-0">
+                    {playlistData && Object.entries(playlistData.locations).map(([key, location]) => (
+                      <Button
+                        key={key}
+                        variant={selectedLocation === key ? "default" : "outline"}
+                        className={`w-full justify-start h-auto p-3 text-left ${
+                          selectedLocation === key 
+                            ? 'bg-blue-600 hover:bg-blue-700 text-white' 
+                            : 'bg-slate-700 hover:bg-slate-600 text-slate-300'
+                        }`}
+                        onClick={() => setSelectedLocation(key)}
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="font-medium text-sm truncate">{location.name}</div>
+                          <div className="text-xs opacity-75 line-clamp-1">{location.description}</div>
+                        </div>
+                      </Button>
+                    ))}
+                  </CardContent>
+                </Card>
+
+                {/* Mode Selection */}
+                <Card className="bg-slate-800 border-slate-700">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-white flex items-center gap-2 text-sm">
+                      <Play className="h-4 w-4" />
+                      Tour Mode
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2 pt-0">
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button
+                        variant={selectedMode === 'teaser' ? "default" : "outline"}
+                        className={`h-auto p-3 ${
+                          selectedMode === 'teaser' 
+                            ? 'bg-purple-600 hover:bg-purple-700 text-white' 
+                            : 'bg-slate-700 hover:bg-slate-600 text-slate-300'
+                        }`}
+                        onClick={() => setSelectedMode('teaser')}
+                      >
+                        <div className="text-center">
+                          <div className="font-medium text-sm">Teaser</div>
+                          <div className="text-xs opacity-75">Preview</div>
+                        </div>
+                      </Button>
+                      <Button
+                        variant={selectedMode === 'full_tour' ? "default" : "outline"}
+                        className={`h-auto p-3 ${
+                          selectedMode === 'full_tour' 
+                            ? 'bg-green-600 hover:bg-green-700 text-white' 
+                            : 'bg-slate-700 hover:bg-slate-600 text-slate-300'
+                        }`}
+                        onClick={() => setSelectedMode('full_tour')}
+                      >
+                        <div className="text-center">
+                          <div className="font-medium text-sm">Full Tour</div>
+                          <div className="text-xs opacity-75">Complete</div>
+                        </div>
+                      </Button>
                     </div>
                   </CardContent>
                 </Card>
-              )}
-          </div>
 
-            {/* Configuration Preview */}
-            <div className="space-y-4 md:space-y-6">
-            {/* Current Configuration Status */}
-            <Card className="bg-slate-800 border-slate-700">
-              <CardHeader className="pb-3 md:pb-6">
-                <CardTitle className="text-white flex items-center gap-2 text-base md:text-lg">
-                  <Globe className="h-5 w-5" />
-                  Configuration Preview
-                </CardTitle>
-                <CardDescription className="text-slate-400 text-sm md:text-base">
-                  Current configuration status and media availability
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3 md:space-y-4 pt-0">
-                {selectedLocation && playlistData ? (
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-slate-300 text-sm md:text-base">Location:</span>
-                      <Badge variant="outline" className="text-white text-xs md:text-sm">
-                        {playlistData.locations[selectedLocation].name}
-                      </Badge>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-slate-300 text-sm md:text-base">Mode:</span>
-                      <Badge variant="outline" className={`text-xs md:text-sm ${selectedMode === 'teaser' ? 'text-purple-400' : 'text-green-400'}`}>
-                        {selectedMode === 'teaser' ? 'Teaser Mode' : 'Full Tour'}
-                      </Badge>
-                    </div>
-                    {selectedMode === 'teaser' && (
-                      <div className="flex items-center justify-between">
-                        <span className="text-slate-300 text-sm md:text-base">Teaser:</span>
-                        <Badge variant="outline" className="text-purple-400 text-xs md:text-sm">
-                          {selectedTeaser.replace('_', ' ').toUpperCase()}
-                        </Badge>
+                {/* Teaser Selection */}
+                {selectedMode === 'teaser' && (
+                  <Card className="bg-slate-800 border-slate-700">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-white flex items-center gap-2 text-sm">
+                        <Users className="h-4 w-4" />
+                        Teaser Selection
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-2 pt-0">
+                      <div className="grid grid-cols-2 gap-2">
+                        {['teaser_1', 'teaser_2', 'teaser_3', 'teaser_4'].map((teaserId) => {
+                          const teaserData = selectedLocation && playlistData 
+                            ? playlistData.locations[selectedLocation]?.teasers[teaserId] 
+                            : null;
+                          
+                          return (
+                            <Button
+                              key={teaserId}
+                              variant={selectedTeaser === teaserId ? "default" : "outline"}
+                              className={`h-auto p-2 min-h-[48px] ${
+                                selectedTeaser === teaserId 
+                                  ? 'bg-purple-600 hover:bg-purple-700 text-white' 
+                                  : 'bg-slate-700 hover:bg-slate-600 text-slate-300'
+                              }`}
+                              onClick={() => setSelectedTeaser(teaserId)}
+                            >
+                              <div className="text-center">
+                                <div className="font-medium text-xs">{teaserId.replace('_', ' ').toUpperCase()}</div>
+                                <div className="flex items-center justify-center mt-1">
+                                  {teaserData?.available ? (
+                                    <CheckCircle className="h-3 w-3 text-green-400" />
+                                  ) : (
+                                    <AlertCircle className="h-3 w-3 text-red-400" />
+                                  )}
+                                </div>
+                              </div>
+                            </Button>
+                          );
+                        })}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+
+              {/* Right Column - Preview and Status */}
+              <div className="space-y-4">
+                {/* Configuration Preview */}
+                <Card className="bg-slate-800 border-slate-700">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-white flex items-center gap-2 text-sm">
+                      <Globe className="h-4 w-4" />
+                      Configuration Preview
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3 pt-0">
+                    {selectedLocation && playlistData ? (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-300 text-sm">Location:</span>
+                          <Badge variant="outline" className="text-white text-xs">
+                            {playlistData.locations[selectedLocation].name}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-300 text-sm">Mode:</span>
+                          <Badge variant="outline" className={`text-xs ${selectedMode === 'teaser' ? 'text-purple-400' : 'text-green-400'}`}>
+                            {selectedMode === 'teaser' ? 'Teaser Mode' : 'Full Tour'}
+                          </Badge>
+                        </div>
+                        {selectedMode === 'teaser' && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-slate-300 text-sm">Teaser:</span>
+                            <Badge variant="outline" className="text-purple-400 text-xs">
+                              {selectedTeaser.replace('_', ' ').toUpperCase()}
+                            </Badge>
+                          </div>
+                        )}
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-300 text-sm">Status:</span>
+                          <div className="flex items-center gap-1">
+                            {currentConfig.isValid ? (
+                              <>
+                                <CheckCircle className="h-3 w-3 text-green-400" />
+                                <span className="text-green-400 text-xs">Available</span>
+                              </>
+                            ) : (
+                              <>
+                                <AlertCircle className="h-3 w-3 text-red-400" />
+                                <span className="text-red-400 text-xs">Not Found</span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-center py-4">
+                        <AlertCircle className="h-6 w-6 text-slate-500 mx-auto mb-2" />
+                        <p className="text-slate-500 text-sm">Select a location to preview</p>
                       </div>
                     )}
-                    <div className="flex items-center justify-between">
-                      <span className="text-slate-300 text-sm md:text-base">Status:</span>
-                      <div className="flex items-center gap-2">
-                        {currentConfig.isValid ? (
-                          <>
-                            <CheckCircle className="h-4 w-4 text-green-400" />
-                            <span className="text-green-400 text-sm">Media Available</span>
-                          </>
-                        ) : (
-                          <>
-                            <AlertCircle className="h-4 w-4 text-red-400" />
-                            <span className="text-red-400 text-sm">Media Not Found</span>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-center py-6">
-                    <AlertCircle className="h-8 w-8 text-slate-500 mx-auto mb-2" />
-                    <p className="text-slate-500 text-sm md:text-base">Select a location to preview configuration</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+                  </CardContent>
+                </Card>
 
-            {/* Media Details */}
-            {selectedLocation && currentConfig.mediaData && (
-              <Card className="bg-slate-800 border-slate-700">
-                <CardHeader className="pb-3 md:pb-6">
-                  <CardTitle className="text-white text-base md:text-lg">Media Details</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3 pt-0">
-                  {selectedMode === 'teaser' ? (
-                    <div>
-                      <h4 className="text-white font-medium mb-2 text-sm md:text-base">{currentConfig.mediaData.title}</h4>
-                      <p className="text-slate-400 text-xs md:text-sm mb-3 line-clamp-2">{currentConfig.mediaData.description}</p>
-                      <div className="space-y-2 text-sm">
-                        <div className="flex items-center gap-2">
-                          <span className="text-slate-300 text-xs md:text-sm">Audio:</span>
-                          {currentConfig.mediaData.audio_src ? (
-                            <CheckCircle className="h-4 w-4 text-green-400" />
-                          ) : (
-                            <AlertCircle className="h-4 w-4 text-red-400" />
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-slate-300 text-xs md:text-sm">Video:</span>
-                          {currentConfig.mediaData.video_src ? (
-                            <CheckCircle className="h-4 w-4 text-green-400" />
-                          ) : (
-                            <AlertCircle className="h-4 w-4 text-red-400" />
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-slate-300 text-xs md:text-sm">Images:</span>
-                          {currentConfig.mediaData.thumbnails && currentConfig.mediaData.thumbnails.length > 0 ? (
-                            <CheckCircle className="h-4 w-4 text-green-400" />
-                          ) : (
-                            <AlertCircle className="h-4 w-4 text-red-400" />
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div>
-                      <h4 className="text-white font-medium mb-2 text-sm md:text-base">Full Tour Experience</h4>
-                      <p className="text-slate-400 text-xs md:text-sm mb-3">
-                        {currentConfig.mediaData.available 
-                          ? `${currentConfig.mediaData.chapters.length} chapters available`
-                          : 'No chapters available'
-                        }
-                      </p>
-                      {currentConfig.mediaData.chapters && currentConfig.mediaData.chapters.length > 0 && (
-                        <div className="space-y-2 max-h-32 overflow-y-auto">
-                          {currentConfig.mediaData.chapters.map((chapter: any, index: number) => (
-                            <div key={index} className="flex items-center gap-2 text-xs md:text-sm">
-                              <span className="text-slate-300 truncate">{chapter.title}:</span>
-                              {chapter.available ? (
-                                <CheckCircle className="h-4 w-4 text-green-400 flex-shrink-0" />
+                {/* Media Details */}
+                {selectedLocation && currentConfig.mediaData && (
+                  <Card className="bg-slate-800 border-slate-700">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-white text-sm">Media Details</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3 pt-0">
+                      {selectedMode === 'teaser' ? (
+                        <div>
+                          <h4 className="text-white font-medium mb-1 text-sm">{currentConfig.mediaData.title}</h4>
+                          <p className="text-slate-400 text-xs mb-3 line-clamp-2">{currentConfig.mediaData.description}</p>
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2">
+                              <span className="text-slate-300 text-xs">Audio:</span>
+                              {currentConfig.mediaData.audio_src ? (
+                                <CheckCircle className="h-3 w-3 text-green-400" />
                               ) : (
-                                <AlertCircle className="h-4 w-4 text-red-400 flex-shrink-0" />
+                                <AlertCircle className="h-3 w-3 text-red-400" />
                               )}
                             </div>
-                          ))}
+                            <div className="flex items-center gap-2">
+                              <span className="text-slate-300 text-xs">Video:</span>
+                              {currentConfig.mediaData.video_src ? (
+                                <CheckCircle className="h-3 w-3 text-green-400" />
+                              ) : (
+                                <AlertCircle className="h-3 w-3 text-red-400" />
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-slate-300 text-xs">Images:</span>
+                              {currentConfig.mediaData.thumbnails && currentConfig.mediaData.thumbnails.length > 0 ? (
+                                <CheckCircle className="h-3 w-3 text-green-400" />
+                              ) : (
+                                <AlertCircle className="h-3 w-3 text-red-400" />
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div>
+                          <h4 className="text-white font-medium mb-1 text-sm">Full Tour Experience</h4>
+                          <p className="text-slate-400 text-xs mb-3">
+                            {currentConfig.mediaData.available 
+                              ? `${currentConfig.mediaData.chapters.length} chapters available`
+                              : 'No chapters available'
+                            }
+                          </p>
+                          {currentConfig.mediaData.chapters && currentConfig.mediaData.chapters.length > 0 && (
+                            <div className="space-y-1 max-h-24 overflow-y-auto">
+                              {currentConfig.mediaData.chapters.map((chapter: any, index: number) => (
+                                <div key={index} className="flex items-center gap-2 text-xs">
+                                  <span className="text-slate-300 truncate">{chapter.title}:</span>
+                                  {chapter.available ? (
+                                    <CheckCircle className="h-3 w-3 text-green-400 flex-shrink-0" />
+                                  ) : (
+                                    <AlertCircle className="h-3 w-3 text-red-400 flex-shrink-0" />
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       )}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Launch Button */}
-            <Card className="bg-slate-800 border-slate-700">
-              <CardContent className="pt-4 md:pt-6">
-                {currentConfig.isValid ? (
-                  <Button 
-                    onClick={handleLaunchConfiguration}
-                    disabled={isConfiguring}
-                    className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white h-12 md:h-14 text-sm md:text-base"
-                  >
-                    {isConfiguring ? (
-                      <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                        Configuring...
-                      </>
-                    ) : (
-                      <>
-                        <ArrowRight className="h-4 w-4 mr-2" />
-                        Launch Configuration
-                      </>
-                    )}
-                  </Button>
-                ) : (
-                  <Alert>
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertDescription className="text-red-300 text-sm md:text-base">
-                      {selectedLocation 
-                        ? 'Selected configuration has no media available. Please choose a different option.'
-                        : 'Please select a tour location to continue.'
-                      }
-                    </AlertDescription>
-                  </Alert>
+                    </CardContent>
+                  </Card>
                 )}
-              </CardContent>
-            </Card>
+              </div>
             </div>
           </div>
+        </div>
+
+        {/* Fixed Footer with Launch Button */}
+        <div className="flex-shrink-0 p-4 border-t border-slate-700/50">
+          {currentConfig.isValid ? (
+            <Button 
+              onClick={handleLaunchConfiguration}
+              disabled={isConfiguring}
+              className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white h-12 text-sm font-medium"
+            >
+              {isConfiguring ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  Configuring...
+                </>
+              ) : (
+                <>
+                  <ArrowRight className="h-4 w-4 mr-2" />
+                  Launch Configuration
+                </>
+              )}
+            </Button>
+          ) : (
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription className="text-red-300 text-sm">
+                {selectedLocation 
+                  ? 'Selected configuration has no media available. Please choose a different option.'
+                  : 'Please select a tour location to continue.'
+                }
+              </AlertDescription>
+            </Alert>
+          )}
         </div>
       </div>
     </div>
